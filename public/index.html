@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ridesometime</title>
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.4.0/mapbox-gl.css" rel="stylesheet">
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.4.0/mapbox-gl.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: linear-gradient(135deg, #fdf6f0 0%, #f0f4fb 50%, #f5f0fa 100%); color: #333; min-height: 100vh; }
+    .container { max-width: 900px; margin: 0 auto; padding: 2rem; }
+    .regions { display: flex; flex-wrap: wrap; gap: 1.5rem; margin-bottom: 1rem; }
+    .region-btn { padding: 0.3rem 0.1rem; background: none; border: none; font-size: 0.9rem; cursor: pointer; color: #999; transition: color 0.15s; text-transform: lowercase; font-family: inherit; }
+    @media (hover: hover) { .region-btn:hover { color: #e040a0; } }
+    .region-btn.active { color: #fc4c02; }
+    .region-btn .count { font-size: 0.7rem; margin-left: 3px; color: #ccc; }
+    .region-btn.active .count { color: #f4a57a; }
+    .map-wrap { position: relative; }
+    .ride-detail { display: none; position: absolute; top: 12px; left: 12px; z-index: 1; background: rgba(255,255,255,0.8); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); padding: 0.6rem 0.9rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.4); box-shadow: 0 2px 8px rgba(0,0,0,0.1); max-width: 280px; }
+    .ride-detail.visible { display: block; }
+    .ride-detail .ride-name { font-size: 0.85rem; font-weight: 600; margin-bottom: 0.3rem; }
+    .ride-detail .ride-stats { font-size: 0.75rem; color: #777; line-height: 1.5; }
+    #map { width: 100%; height: 600px; border-radius: 10px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+    #map .mapboxgl-canvas-container,
+    #map .mapboxgl-canvas-container.mapboxgl-interactive { cursor: default; }
+
+    @media (max-width: 600px) {
+      .container { padding: 0.75rem; }
+      .regions { gap: 0.75rem; margin-bottom: 0.5rem; }
+      .region-btn { font-size: 0.75rem; }
+      #map { height: calc(100dvh - 5rem); border-radius: 8px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div id="regions" class="regions"></div>
+    <div class="map-wrap">
+      <div id="ride-detail" class="ride-detail">
+        <div class="ride-name" id="ride-name"></div>
+        <div class="ride-stats" id="ride-stats"></div>
+      </div>
+      <div id="map"></div>
+    </div>
+  </div>
+
+  <script src="/config.js"></script>
+  <script>
+    const REGIONS = [
+      { name: 'Bay Area', bounds: [[-122.9, 37.2], [-122.2, 38.15]] },
+      { name: 'Washington', bounds: [[-123.5, 47.0], [-120.5, 50.2]] },
+      { name: 'Japan', bounds: [[136.8, 34.3], [139.9, 35.9]] },
+      { name: 'Tahoe', bounds: [[-120.3, 39.1], [-120.0, 39.7]] },
+      { name: 'San Diego', bounds: [[-117.3, 32.7], [-116.6, 33.2]] },
+      { name: 'Switzerland', bounds: [[6.8, 46.4], [8.4, 47.4]] },
+    ];
+    const HOME = { center: [-122.52, 37.82], zoom: window.innerWidth <= 600 ? 10 : 11 };
+    const LINE_COLOR = ['interpolate', ['linear'], ['get', 'age'], 0, '#4060e0', 0.5, '#e040a0', 1, '#fc4c02'];
+    const NO_MATCH = ['==', ['id'], -1];
+
+    let map, geojson, activeRegion = null, selectedId = null;
+
+    async function init() {
+      geojson = await fetch('/data/rides.json').then(r => r.json());
+
+      // Tag rides with region + age
+      const dates = geojson.features.map(f => new Date(f.properties.date).getTime());
+      const minDate = Math.min(...dates), dateRange = Math.max(...dates) - minDate || 1;
+      geojson.features.forEach((f, i) => {
+        f.id = i;
+        const [lng, lat] = f.geometry.coordinates[Math.floor(f.geometry.coordinates.length / 2)] || [0, 0];
+        f.properties.region = (REGIONS.find(r => {
+          const [[minLng, minLat], [maxLng, maxLat]] = r.bounds;
+          return lat >= minLat && lat <= maxLat && lng >= minLng && lng <= maxLng;
+        }) || { name: 'other' }).name;
+        f.properties.age = (new Date(f.properties.date).getTime() - minDate) / dateRange;
+      });
+
+      // Count rides per region
+      const counts = {};
+      geojson.features.forEach(f => { counts[f.properties.region] = (counts[f.properties.region] || 0) + 1; });
+
+      // Build tabs
+      const regionsEl = document.getElementById('regions');
+      addTab(regionsEl, 'all', geojson.features.length, () => {
+        activeRegion = null;
+        selectedId = null;
+        hideRideDetail();
+        applyFilter(null);
+        map.flyTo({ ...HOME, duration: 1500 });
+      });
+      REGIONS.forEach(r => {
+        addTab(regionsEl, r.name, counts[r.name] || 0, (btn) => {
+          hideRideDetail();
+          if (btn.classList.contains('active')) {
+            setActiveTab(document.querySelector('.region-btn'));
+            activeRegion = null;
+            selectedId = null;
+            applyFilter(null);
+            map.flyTo({ ...HOME, duration: 1500 });
+          } else {
+            setActiveTab(btn);
+            activeRegion = r;
+            selectedId = null;
+            applyFilter(['==', ['get', 'region'], r.name]);
+            map.fitBounds(r.bounds, { padding: 40, duration: 1500 });
+          }
+        });
+      });
+
+      // Init map
+      mapboxgl.accessToken = MAPBOX_TOKEN;
+      map = new mapboxgl.Map({ container: 'map', style: 'mapbox://styles/mapbox/light-v11', ...HOME });
+      map.addControl(new mapboxgl.NavigationControl());
+
+      map.on('load', () => {
+        map.addSource('rides', { type: 'geojson', data: geojson });
+        map.addLayer({ id: 'rides-hit', type: 'line', source: 'rides', paint: { 'line-color': '#000', 'line-width': 14, 'line-opacity': 0 } });
+        map.addLayer({ id: 'rides-layer', type: 'line', source: 'rides', paint: { 'line-color': LINE_COLOR, 'line-width': 2, 'line-opacity': 0.6 } });
+        map.addLayer({ id: 'rides-hover', type: 'line', source: 'rides', paint: { 'line-color': LINE_COLOR, 'line-width': 3, 'line-opacity': 0.9 }, filter: NO_MATCH });
+
+        // Hover
+        map.on('mouseenter', 'rides-hit', () => map.getCanvas().style.cursor = 'pointer');
+        map.on('mouseleave', 'rides-hit', () => { map.getCanvas().style.cursor = ''; map.setFilter('rides-hover', NO_MATCH); });
+        map.on('mousemove', 'rides-hit', e => { if (e.features.length) map.setFilter('rides-hover', ['==', ['id'], e.features[0].id]); });
+
+        // Click ride: isolate + zoom
+        map.on('click', 'rides-hit', e => {
+          if (!e.features.length) return;
+          selectedId = e.features[0].id;
+          setActiveTab(document.querySelector('.region-btn'));
+          activeRegion = null;
+          map.setFilter('rides-layer', ['==', ['id'], selectedId]);
+          map.setFilter('rides-hit', NO_MATCH);
+          map.setFilter('rides-hover', NO_MATCH);
+          map.getCanvas().style.cursor = '';
+          showRideDetail(geojson.features[selectedId].properties);
+          const bounds = new mapboxgl.LngLatBounds();
+          geojson.features[selectedId].geometry.coordinates.forEach(c => bounds.extend(c));
+          map.fitBounds(bounds, { padding: 60, duration: 1000 });
+        });
+
+        // Click empty space: deselect
+        map.on('click', e => {
+          if (selectedId === null) return;
+          if (map.queryRenderedFeatures(e.point, { layers: ['rides-hit'] }).length) return;
+          selectedId = null;
+          hideRideDetail();
+          applyFilter(null);
+        });
+      });
+    }
+
+    function fmtTime(s) { const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60); return h > 0 ? `${h}h ${m}m` : `${m}m`; }
+
+    function showRideDetail(p) {
+      const mi = (p.distance / 1609.34).toFixed(1);
+      document.getElementById('ride-name').textContent = p.name;
+      document.getElementById('ride-stats').innerHTML = `${mi} mi<br>${fmtTime(p.moving_time)} riding time<br>${fmtTime(p.elapsed_time)} total`;
+      document.getElementById('ride-detail').classList.add('visible');
+    }
+
+    function hideRideDetail() {
+      document.getElementById('ride-detail').classList.remove('visible');
+    }
+
+    function addTab(parent, name, count, onClick) {
+      const btn = document.createElement('button');
+      btn.className = 'region-btn' + (name === 'all' ? ' active' : '');
+      btn.innerHTML = `${name}<span class="count">${count}</span>`;
+      btn.addEventListener('click', () => onClick(btn));
+      parent.appendChild(btn);
+    }
+
+    function setActiveTab(btn) {
+      document.querySelectorAll('.region-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    }
+
+    function applyFilter(filter) {
+      map.setFilter('rides-layer', filter);
+      map.setFilter('rides-hit', filter);
+      map.setFilter('rides-hover', NO_MATCH);
+    }
+
+    init();
+  </script>
+</body>
+</html>

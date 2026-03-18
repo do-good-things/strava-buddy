@@ -1,0 +1,28 @@
+{
+  "name": "strava-buddy",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/do-good-things/strava-buddy.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/do-good-things/strava-buddy/issues"
+  },
+  "homepage": "https://github.com/do-good-things/strava-buddy#readme",
+  "dependencies": {
+    "@mapbox/polyline": "^1.2.1",
+    "axios": "^1.13.6",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1"
+  }
+}
