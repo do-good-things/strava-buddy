@@ -8,40 +8,67 @@
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.4.0/mapbox-gl.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fff; color: #333; min-height: 100vh; }
-    .container { max-width: 900px; margin: 0 auto; padding: 2rem; }
-    .regions { display: flex; flex-wrap: wrap; gap: 1.5rem; margin-bottom: 1rem; }
-    .region-btn { padding: 0.3rem 0.1rem; background: none; border: none; font-size: 0.9rem; cursor: pointer; color: #999; transition: color 0.15s; text-transform: lowercase; font-family: inherit; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fff; color: #333; min-height: 100vh; display: flex; flex-direction: column; }
+    .container { max-width: 1400px; margin: 0 auto; padding: 2rem; width: 100%; flex: 1; display: flex; flex-direction: column; }
+
+
+    .site-blurb { font-size: 0.95rem; color: #aaa; letter-spacing: 0.02em; }
+    .map-row { display: flex; flex: 1; gap: 1rem; }
+    .regions { display: flex; flex-direction: column; gap: 0.25rem; padding-top: 0.25rem; }
+    .region-btn { padding: 0.3rem 0.1rem; background: none; border: none; font-size: 1rem; cursor: pointer; color: #999; transition: color 0.15s; text-transform: lowercase; font-family: inherit; text-align: right; white-space: nowrap; }
     @media (hover: hover) { .region-btn:hover { color: #e040a0; } }
     .region-btn.active { color: #fc4c02; }
     .region-btn .count { font-size: 0.7rem; margin-left: 3px; color: #ccc; }
     .region-btn.active .count { color: #f4a57a; }
-    .map-wrap { position: relative; }
+    .map-wrap { position: relative; flex: 1; display: flex; flex-direction: column; min-width: 0; }
+    .site-footer { margin-top: 1.25rem; }
+    .profile-card { position: absolute; top: 12px; left: 12px; z-index: 1; background: rgba(255,255,255,0.8); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); padding: 0.5rem 0.7rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.4); box-shadow: 0 2px 8px rgba(0,0,0,0.1); display: flex; align-items: center; gap: 0.5rem; text-decoration: none; color: inherit; transition: background 0.15s; width: auto; }
+    @media (hover: hover) { .profile-card:hover { background: rgba(255,255,255,0.95); } }
+    .profile-card img { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; }
+    .profile-card .profile-info { display: flex; flex-direction: column; }
+    .profile-card .profile-name { font-size: 0.8rem; font-weight: 600; color: #333; }
+    .profile-card .profile-city { font-size: 0.7rem; color: #999; }
     .ride-detail { display: none; position: absolute; top: 12px; left: 12px; z-index: 1; background: rgba(255,255,255,0.8); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); padding: 0.6rem 0.9rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.4); box-shadow: 0 2px 8px rgba(0,0,0,0.1); max-width: 280px; }
     .ride-detail.visible { display: block; }
     .ride-detail .ride-name { font-size: 0.85rem; font-weight: 600; margin-bottom: 0.3rem; }
     .ride-detail .ride-stats { font-size: 0.75rem; color: #777; line-height: 1.5; }
-    #map { width: 100%; height: 600px; border-radius: 10px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+    #map { width: 100%; flex: 1; min-height: 500px; border-radius: 10px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
     #map .mapboxgl-canvas-container,
     #map .mapboxgl-canvas-container.mapboxgl-interactive { cursor: default; }
 
     @media (max-width: 600px) {
       .container { padding: 0.75rem; }
-      .regions { gap: 0.75rem; margin-bottom: 0.5rem; }
+      .map-row { flex-direction: column; gap: 0.5rem; }
+      .regions { flex-direction: row; flex-wrap: wrap; gap: 0.75rem; }
       .region-btn { font-size: 0.75rem; }
-      #map { height: calc(100dvh - 5rem); border-radius: 8px; }
+      .site-footer { margin-top: 0.75rem; }
+
+      .site-blurb { font-size: 0.8rem; }
+      #map { min-height: unset; height: auto; border-radius: 8px; }
     }
   </style>
 </head>
 <body>
   <div class="container">
-    <div id="regions" class="regions"></div>
+    <div class="map-row">
     <div class="map-wrap">
+      <a class="profile-card" id="profile-card" href="https://www.strava.com/athletes/118918676" target="_blank" rel="noopener">
+        <img src="https://dgalywyr863hv.cloudfront.net/pictures/athletes/118918676/28452476/15/medium.jpg" alt="Sarah Snow">
+        <div class="profile-info">
+          <span class="profile-name">Sarah Snow</span>
+          <span class="profile-city">San Francisco</span>
+        </div>
+      </a>
       <div id="ride-detail" class="ride-detail">
         <div class="ride-name" id="ride-name"></div>
         <div class="ride-stats" id="ride-stats"></div>
       </div>
       <div id="map"></div>
+    </div>
+    <div id="regions" class="regions"></div>
+    </div>
+    <div class="site-footer">
+      <div class="site-blurb">🚴‍♀️🌍💗🌸🤸‍♀️ a visual collection of places explored by me via bicycle</div>
     </div>
   </div>
 
@@ -61,15 +88,49 @@
 
     let map, geojson, activeRegion = null, selectedId = null;
 
+    // Split a LineString into MultiLineString when consecutive points are > maxGapKm apart
+    function splitGaps(coords, maxGapKm = 5) {
+      if (coords.length < 2) return [coords];
+      const segments = [];
+      let seg = [coords[0]];
+      for (let i = 1; i < coords.length; i++) {
+        const [lng1, lat1] = coords[i - 1], [lng2, lat2] = coords[i];
+        const dlat = (lat2 - lat1) * Math.PI / 180, dlng = (lng2 - lng1) * Math.PI / 180;
+        const a = Math.sin(dlat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dlng / 2) ** 2;
+        const km = 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        if (km > maxGapKm) {
+          if (seg.length >= 2) segments.push(seg);
+          seg = [coords[i]];
+        } else {
+          seg.push(coords[i]);
+        }
+      }
+      if (seg.length >= 2) segments.push(seg);
+      return segments;
+    }
+
     async function init() {
       geojson = await fetch('/data/rides.json').then(r => r.json());
+
+      // Split rides at large GPS gaps to avoid long straight lines over water/pauses
+      geojson.features.forEach(f => {
+        if (f.geometry.type === 'LineString') {
+          const segments = splitGaps(f.geometry.coordinates);
+          if (segments.length > 1) {
+            f.geometry = { type: 'MultiLineString', coordinates: segments };
+          } else if (segments.length === 1) {
+            f.geometry.coordinates = segments[0];
+          }
+        }
+      });
 
       // Tag rides with region + age
       const dates = geojson.features.map(f => new Date(f.properties.date).getTime());
       const minDate = Math.min(...dates), dateRange = Math.max(...dates) - minDate || 1;
       geojson.features.forEach((f, i) => {
         f.id = i;
-        const [lng, lat] = f.geometry.coordinates[Math.floor(f.geometry.coordinates.length / 2)] || [0, 0];
+        const allCoords = f.geometry.type === 'MultiLineString' ? f.geometry.coordinates.flat() : f.geometry.coordinates;
+        const [lng, lat] = allCoords[Math.floor(allCoords.length / 2)] || [0, 0];
         f.properties.region = (REGIONS.find(r => {
           const [[minLng, minLat], [maxLng, maxLat]] = r.bounds;
           return lat >= minLat && lat <= maxLat && lng >= minLng && lng <= maxLng;
@@ -84,7 +145,6 @@
       // Build tabs
       const regionsEl = document.getElementById('regions');
       addTab(regionsEl, 'all', geojson.features.length, (btn) => {
-        if (btn.classList.contains('active') && selectedId === null) return;
         setActiveTab(btn);
         activeRegion = null;
         selectedId = null;
@@ -139,7 +199,9 @@
           map.getCanvas().style.cursor = '';
           showRideDetail(geojson.features[selectedId].properties);
           const bounds = new mapboxgl.LngLatBounds();
-          geojson.features[selectedId].geometry.coordinates.forEach(c => bounds.extend(c));
+          const geom = geojson.features[selectedId].geometry;
+          const clickCoords = geom.type === 'MultiLineString' ? geom.coordinates.flat() : geom.coordinates;
+          clickCoords.forEach(c => bounds.extend(c));
           map.fitBounds(bounds, { padding: 60, duration: 1000 });
         });
 
@@ -160,11 +222,13 @@
       const mi = (p.distance / 1609.34).toFixed(1);
       document.getElementById('ride-name').textContent = p.name;
       document.getElementById('ride-stats').innerHTML = `${mi} mi<br>${fmtTime(p.moving_time)} riding time<br>${fmtTime(p.elapsed_time)} total`;
+      document.getElementById('profile-card').style.display = 'none';
       document.getElementById('ride-detail').classList.add('visible');
     }
 
     function hideRideDetail() {
       document.getElementById('ride-detail').classList.remove('visible');
+      document.getElementById('profile-card').style.display = '';
     }
 
     function addTab(parent, name, count, onClick) {
