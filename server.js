@@ -85,9 +85,9 @@ async function refreshRideData() {
     });
     fs.writeFileSync(path.join(DATA_DIR, 'profile.json'), JSON.stringify(profile, null, 2));
 
-    // Fetch all activities, extract rides
+    // Fetch all activities, collect ride IDs
     let page = 1;
-    const features = [];
+    const rides = [];
 
     while (true) {
       const { data } = await axios.get('https://www.strava.com/api/v3/athlete/activities', {
@@ -99,6 +99,26 @@ async function refreshRideData() {
 
       for (const a of data) {
         if ((a.type === 'Ride' || a.sport_type === 'Ride') && a.map?.summary_polyline) {
+          rides.push(a);
+        }
+      }
+
+      if (data.length < 200) break;
+      page++;
+    }
+
+    console.log(`Found ${rides.length} rides, fetching detailed polylines...`);
+
+    // Fetch detailed polyline for each ride
+    const features = [];
+    for (let i = 0; i < rides.length; i++) {
+      const a = rides[i];
+      try {
+        const { data: detail } = await axios.get(`https://www.strava.com/api/v3/activities/${a.id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const poly = detail.map?.polyline || detail.map?.summary_polyline;
+        if (poly) {
           features.push({
             type: 'Feature',
             properties: {
@@ -109,13 +129,13 @@ async function refreshRideData() {
               elapsed_time: a.elapsed_time,
               elevation_gain: a.total_elevation_gain,
             },
-            geometry: polyline.toGeoJSON(a.map.summary_polyline),
+            geometry: polyline.toGeoJSON(poly),
           });
         }
+        if ((i + 1) % 20 === 0) console.log(`  ${i + 1}/${rides.length} detailed polylines fetched`);
+      } catch (err) {
+        console.warn(`  Skipped activity ${a.id}: ${err.response?.status || err.message}`);
       }
-
-      if (data.length < 200) break;
-      page++;
     }
 
     const geojson = { type: 'FeatureCollection', features };

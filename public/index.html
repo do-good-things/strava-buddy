@@ -70,7 +70,7 @@
     <div id="regions" class="regions"></div>
     </div>
     <div class="site-footer">
-      <div class="site-blurb">🚴‍♀️🌍💗 a collection of places explored by me via bike</div>
+      <div class="site-blurb">🚴‍♀️🌍💗 a collection of places explored via bicycle</div>
     </div>
   </div>
 
@@ -179,10 +179,10 @@
       map.addControl(new mapboxgl.NavigationControl());
 
       map.on('load', () => {
-        map.addSource('rides', { type: 'geojson', data: geojson });
-        map.addLayer({ id: 'rides-hit', type: 'line', source: 'rides', paint: { 'line-color': '#000', 'line-width': 14, 'line-opacity': 0 } });
-        map.addLayer({ id: 'rides-layer', type: 'line', source: 'rides', paint: { 'line-color': LINE_COLOR, 'line-width': 2, 'line-opacity': 0.6 } });
-        map.addLayer({ id: 'rides-hover', type: 'line', source: 'rides', paint: { 'line-color': LINE_COLOR, 'line-width': 3, 'line-opacity': 0.9 }, filter: NO_MATCH });
+        map.addSource('rides', { type: 'geojson', data: geojson, tolerance: 0.5 });
+        map.addLayer({ id: 'rides-hit', type: 'line', source: 'rides', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': '#000', 'line-width': 14, 'line-opacity': 0 } });
+        map.addLayer({ id: 'rides-layer', type: 'line', source: 'rides', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': LINE_COLOR, 'line-width': 2, 'line-opacity': 0.6 } });
+        map.addLayer({ id: 'rides-hover', type: 'line', source: 'rides', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': LINE_COLOR, 'line-width': 3, 'line-opacity': 0.9 }, filter: NO_MATCH });
 
         // Hover
         map.on('mouseenter', 'rides-hit', () => map.getCanvas().style.cursor = 'pointer');
