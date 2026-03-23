@@ -4,15 +4,18 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>ridesometime</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌞</text></svg>">
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.4.0/mapbox-gl.css" rel="stylesheet">
+  <link href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.3/mapbox-gl-geocoder.css" rel="stylesheet">
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.4.0/mapbox-gl.js"></script>
+  <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.3/mapbox-gl-geocoder.min.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fff; color: #333; min-height: 100vh; display: flex; flex-direction: column; }
     .container { max-width: 1400px; margin: 0 auto; padding: 2rem; width: 100%; flex: 1; display: flex; flex-direction: column; }
 
 
-    .site-blurb { font-size: 0.95rem; color: #aaa; letter-spacing: 0.02em; }
+    .site-blurb { font-size: 0.8rem; color: #aaa; letter-spacing: 0.02em; }
     .map-row { display: flex; flex: 1; gap: 1rem; }
     .regions { display: flex; flex-direction: column; gap: 0.25rem; padding-top: 0.25rem; }
     .region-btn { padding: 0.3rem 0.1rem; background: none; border: none; font-size: 1rem; cursor: pointer; color: #999; transition: color 0.15s; text-transform: lowercase; font-family: inherit; text-align: right; white-space: nowrap; }
@@ -22,19 +25,27 @@
     .region-btn.active .count { color: #f4a57a; }
     .map-wrap { position: relative; flex: 1; display: flex; flex-direction: column; min-width: 0; }
     .site-footer { margin-top: 1.25rem; }
-    .profile-card { position: absolute; top: 12px; left: 12px; z-index: 1; background: rgba(255,255,255,0.8); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); padding: 0.5rem 0.7rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.4); box-shadow: 0 2px 8px rgba(0,0,0,0.1); display: flex; align-items: center; gap: 0.5rem; text-decoration: none; color: inherit; transition: background 0.15s; width: auto; }
-    @media (hover: hover) { .profile-card:hover { background: rgba(255,255,255,0.95); } }
+    .profile-card { position: absolute; top: 12px; left: 12px; z-index: 1; background: #fff; padding: 0.5rem 0.7rem; border-radius: 4px; border: none; box-shadow: 0 0 0 2px rgba(0,0,0,0.1); display: flex; align-items: center; gap: 0.5rem; text-decoration: none; color: inherit; transition: background 0.15s; width: auto; }
+    @media (hover: hover) { .profile-card:hover { background: #f0f0f0; } }
     .profile-card img { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; }
     .profile-card .profile-info { display: flex; flex-direction: column; }
     .profile-card .profile-name { font-size: 0.8rem; font-weight: 600; color: #333; }
     .profile-card .profile-city { font-size: 0.7rem; color: #999; }
-    .ride-detail { display: none; position: absolute; top: 12px; left: 12px; z-index: 1; background: rgba(255,255,255,0.8); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); padding: 0.6rem 0.9rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.4); box-shadow: 0 2px 8px rgba(0,0,0,0.1); max-width: 280px; }
+    .ride-detail { display: none; position: absolute; top: 12px; left: 12px; z-index: 1; background: #fff; padding: 0.6rem 0.9rem; border-radius: 4px; border: none; box-shadow: 0 0 0 2px rgba(0,0,0,0.1); max-width: 280px; }
     .ride-detail.visible { display: block; }
     .ride-detail .ride-name { font-size: 0.85rem; font-weight: 600; margin-bottom: 0.3rem; }
     .ride-detail .ride-stats { font-size: 0.75rem; color: #777; line-height: 1.5; }
-    #map { width: 100%; flex: 1; min-height: 500px; border-radius: 10px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+    #map { width: 100%; flex: 1; min-height: 500px; border-radius: 4px; box-shadow: 0 0 0 2px rgba(0,0,0,0.1); }
     #map .mapboxgl-canvas-container,
     #map .mapboxgl-canvas-container.mapboxgl-interactive { cursor: default; }
+    .mapboxgl-ctrl-geocoder { background: #fff; border-radius: 4px; box-shadow: 0 0 0 2px rgba(0,0,0,0.1); border: none; }
+    .mapboxgl-ctrl-geocoder.mapboxgl-ctrl-geocoder--collapsed { width: 29px; height: 29px; min-width: 29px; }
+    .mapboxgl-ctrl-geocoder.mapboxgl-ctrl-geocoder--collapsed .mapboxgl-ctrl-geocoder--icon-search { width: 15px; height: 15px; top: 7px; left: 7px; }
+    .mapboxgl-ctrl-geocoder:not(.mapboxgl-ctrl-geocoder--collapsed) { height: 29px; min-height: 29px; }
+    .mapboxgl-ctrl-geocoder input[type="text"] { font-size: 0.8rem; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; height: 29px; padding: 0 25px; }
+    .mapboxgl-ctrl-geocoder .mapboxgl-ctrl-geocoder--icon-search { top: 7px; left: 7px; width: 15px; height: 15px; }
+    .mapboxgl-ctrl-geocoder .mapboxgl-ctrl-geocoder--icon-close { width: 13px; height: 13px; margin-top: 3px; }
+    .mapboxgl-ctrl-geocoder .suggestions { font-size: 0.8rem; }
 
     @media (max-width: 600px) {
       html, body { height: 100svh; min-height: 0; margin: 0; overflow: hidden; }
@@ -176,6 +187,7 @@
       // Init map
       mapboxgl.accessToken = MAPBOX_TOKEN;
       map = new mapboxgl.Map({ container: 'map', style: 'mapbox://styles/mapbox/light-v11', ...HOME });
+      map.addControl(new MapboxGeocoder({ accessToken: MAPBOX_TOKEN, mapboxgl, marker: false, collapsed: true, placeholder: 'Search location...', flyTo: { speed: 5, curve: 1, zoom: 13 } }), 'top-right');
       map.addControl(new mapboxgl.NavigationControl());
 
       map.on('load', () => {
