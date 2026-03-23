@@ -36,6 +36,8 @@
     .ride-detail.visible { display: block; }
     .ride-detail .ride-name { font-size: 0.85rem; font-weight: 600; margin-bottom: 0.3rem; }
     .ride-detail .ride-stats { font-size: 0.75rem; color: #777; line-height: 1.5; }
+    .ride-detail .gpx-btn { display: block; width: 100%; margin-top: 0.4rem; padding: 0.25rem 0.5rem; font-size: 0.7rem; font-family: inherit; text-transform: lowercase; color: #999; background: none; border: 1px solid #ddd; border-radius: 3px; cursor: pointer; transition: color 0.15s, border-color 0.15s; }
+    @media (hover: hover) { .ride-detail .gpx-btn:hover { color: #fc4c02; border-color: #fc4c02; } }
     #map { width: 100%; flex: 1; min-height: 500px; border-radius: 4px; box-shadow: 0 0 0 2px rgba(0,0,0,0.1); }
     #map .mapboxgl-canvas-container,
     #map .mapboxgl-canvas-container.mapboxgl-interactive { cursor: default; }
@@ -72,6 +74,7 @@
       <div id="ride-detail" class="ride-detail">
         <div class="ride-name" id="ride-name"></div>
         <div class="ride-stats" id="ride-stats"></div>
+        <button class="gpx-btn" id="gpx-btn"><svg width="12" height="12" viewBox="0 0 1080 1080" fill="none" stroke="currentColor" stroke-width="80" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px"><path d="M540 120v560"/><path d="M340 480l200 200 200-200"/><path d="M120 720v160h840V720"/></svg> .gpx</button>
       </div>
       <div id="map"></div>
     </div>
@@ -231,10 +234,34 @@
 
     function fmtTime(s) { const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60); return h > 0 ? `${h}h ${m}m` : `${m}m`; }
 
+    function toGpx(feature) {
+      const name = feature.properties.name.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const geom = feature.geometry;
+      const segments = geom.type === 'MultiLineString' ? geom.coordinates : [geom.coordinates];
+      const trksegs = segments.map(seg =>
+        '    <trkseg>\n' + seg.map(([lng, lat]) => `      <trkpt lat="${lat}" lon="${lng}"></trkpt>`).join('\n') + '\n    </trkseg>'
+      ).join('\n');
+      return `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="ridesometime" xmlns="http://www.topografix.com/GPX/1/1">\n  <trk>\n    <name>${name}</name>\n${trksegs}\n  </trk>\n</gpx>`;
+    }
+
+    function downloadGpx() {
+      if (selectedId === null) return;
+      const feature = geojson.features[selectedId];
+      const gpx = toGpx(feature);
+      const slug = feature.properties.name.replace(/[^a-z0-9]+/gi, '_').toLowerCase();
+      const blob = new Blob([gpx], { type: 'application/gpx+xml' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `${slug}.gpx`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }
+
     function showRideDetail(p) {
       const mi = (p.distance / 1609.34).toFixed(1);
       document.getElementById('ride-name').textContent = p.name;
       document.getElementById('ride-stats').innerHTML = `${mi} mi<br>${fmtTime(p.moving_time)} riding time<br>${fmtTime(p.elapsed_time)} total`;
+      document.getElementById('gpx-btn').onclick = downloadGpx;
       document.getElementById('profile-card').style.display = 'none';
       document.getElementById('ride-detail').classList.add('visible');
     }
