@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>ridesometime</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌞</text></svg>">
+  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌞</text></svg>">
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.4.0/mapbox-gl.css" rel="stylesheet">
   <link href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.3/mapbox-gl-geocoder.css" rel="stylesheet">
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.4.0/mapbox-gl.js"></script>
@@ -42,7 +43,8 @@
     .mapboxgl-ctrl-geocoder.mapboxgl-ctrl-geocoder--collapsed { width: 29px; height: 29px; min-width: 29px; }
     .mapboxgl-ctrl-geocoder.mapboxgl-ctrl-geocoder--collapsed .mapboxgl-ctrl-geocoder--icon-search { width: 15px; height: 15px; top: 7px; left: 7px; }
     .mapboxgl-ctrl-geocoder:not(.mapboxgl-ctrl-geocoder--collapsed) { height: 29px; min-height: 29px; }
-    .mapboxgl-ctrl-geocoder input[type="text"] { font-size: 0.8rem; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; height: 29px; padding: 0 25px; }
+    .mapboxgl-ctrl-geocoder input[type="text"] { font-size: 0.8rem; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; height: 29px; padding: 0 25px; outline: none; }
+    .mapboxgl-ctrl-geocoder input[type="text"]:focus { outline: none; }
     .mapboxgl-ctrl-geocoder .mapboxgl-ctrl-geocoder--icon-search { top: 7px; left: 7px; width: 15px; height: 15px; }
     .mapboxgl-ctrl-geocoder .mapboxgl-ctrl-geocoder--icon-close { width: 13px; height: 13px; margin-top: 3px; }
     .mapboxgl-ctrl-geocoder .suggestions { font-size: 0.8rem; }
@@ -187,8 +189,10 @@
       // Init map
       mapboxgl.accessToken = MAPBOX_TOKEN;
       map = new mapboxgl.Map({ container: 'map', style: 'mapbox://styles/mapbox/light-v11', ...HOME });
-      map.addControl(new MapboxGeocoder({ accessToken: MAPBOX_TOKEN, mapboxgl, marker: false, collapsed: true, placeholder: 'Search location...', flyTo: { speed: 5, curve: 1, zoom: 13 } }), 'top-right');
+      map.addControl(new MapboxGeocoder({ accessToken: MAPBOX_TOKEN, mapboxgl, marker: false, collapsed: true, placeholder: 'Search location...', flyTo: { speed: 5, curve: 1, zoom: 11 } }), 'top-right');
       map.addControl(new mapboxgl.NavigationControl());
+      const geoInput = document.querySelector('.mapboxgl-ctrl-geocoder input');
+      if (geoInput) { geoInput.spellcheck = false; geoInput.autocomplete = 'off'; geoInput.autocorrect = 'off'; geoInput.autocapitalize = 'off'; }
 
       map.on('load', () => {
         map.addSource('rides', { type: 'geojson', data: geojson, tolerance: 0.5 });
