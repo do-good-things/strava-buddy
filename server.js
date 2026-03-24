@@ -496,10 +496,15 @@ app.get('/auth/callback', async (req, res) => {
   }
 });
 
+// Serve Mapbox token dynamically (config.js is gitignored)
+app.get('/config.js', (req, res) => {
+  res.type('js').send(`const MAPBOX_TOKEN = '${process.env.MAPBOX_TOKEN}';`);
+});
+
 // Serve per-user data files from storage directory
 app.use('/data', express.static(DATA_DIR));
 
-// Static file serving (config.js, favicon, etc.)
+// Static file serving (favicon, etc.)
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Dynamic user map page — must come after static routes
