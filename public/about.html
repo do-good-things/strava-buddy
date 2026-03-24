@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ridesometime</title>
+  <title>about us - ridesometime</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌞</text></svg>">
   <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌞</text></svg>">
   <style>
@@ -13,20 +13,18 @@
       background: #fff; color: #333;
       min-height: 100vh; display: flex; align-items: center; justify-content: center;
     }
-    .home { text-align: center; }
-    .home h1 { font-size: 1.5rem; font-weight: 400; letter-spacing: 0.02em; margin-bottom: 2rem; color: #333; }
-    .home nav { display: flex; gap: 1.5rem; justify-content: center; }
-    .home nav a { font-size: 0.9rem; color: #999; text-decoration: none; transition: color 0.15s; }
-    @media (hover: hover) { .home nav a:hover { color: #fc4c02; } }
+    .about { max-width: 480px; padding: 2rem; }
+    .about h1 { font-size: 1.5rem; font-weight: 400; letter-spacing: 0.02em; margin-bottom: 1rem; }
+    .about p { font-size: 0.9rem; line-height: 1.6; color: #666; margin-bottom: 1rem; }
+    .about .back { display: inline-block; margin-top: 1rem; font-size: 0.8rem; color: #ccc; text-decoration: none; }
+    @media (hover: hover) { .about .back:hover { color: #999; } }
   </style>
 </head>
 <body>
-  <div class="home">
-    <h1>ridesometime.com</h1>
-    <nav>
-      <a href="/about-us">about us</a>
-      <a href="/join">join</a>
-    </nav>
+  <div class="about">
+    <h1>about ridesometime</h1>
+    <p>a collection of places explored via bicycle.</p>
+    <a class="back" href="/">back</a>
   </div>
 </body>
 </html>

@@ -8,47 +8,36 @@ const polyline = require('@mapbox/polyline');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const DATA_DIR = path.join(__dirname, 'public', 'data');
-const TOKENS_PATH = path.join(__dirname, '.tokens.json');
-const REFRESH_INTERVAL = 60 * 60 * 1000; // 1 hour
+const TOKENS_DIR = path.join(__dirname, '.tokens');
 
-// Load saved tokens on startup
-let tokenData = null;
-try {
-  tokenData = JSON.parse(fs.readFileSync(TOKENS_PATH, 'utf8'));
-  console.log('Loaded saved tokens');
-} catch { /* no saved tokens */ }
+// Ensure directories exist
+fs.mkdirSync(TOKENS_DIR, { recursive: true });
+fs.mkdirSync(DATA_DIR, { recursive: true });
 
-app.use(express.json());
+// --- Multi-user token helpers ---
 
-// Redirect user to Strava OAuth
-app.get('/auth/strava', (req, res) => {
-  const authUrl = `https://www.strava.com/oauth/authorize?client_id=${process.env.STRAVA_CLIENT_ID}&response_type=code&redirect_uri=http://localhost:${PORT}/auth/callback&approval_prompt=force&scope=read,activity:read`;
-  res.redirect(authUrl);
-});
-
-// OAuth callback — exchange code for tokens
-app.get('/auth/callback', async (req, res) => {
-  const { code } = req.query;
-  if (!code) return res.status(400).send('Missing authorization code');
-
+function loadUserTokens(athleteId) {
   try {
-    const response = await axios.post('https://www.strava.com/oauth/token', {
-      client_id: process.env.STRAVA_CLIENT_ID,
-      client_secret: process.env.STRAVA_CLIENT_SECRET,
-      code,
-      grant_type: 'authorization_code',
-    });
-    tokenData = response.data;
-    fs.writeFileSync(TOKENS_PATH, JSON.stringify(response.data, null, 2));
-    res.redirect('/');
-  } catch (err) {
-    console.error('Token exchange failed:', err.response?.data || err.message);
-    res.status(500).send('Authentication failed');
-  }
-});
+    return JSON.parse(fs.readFileSync(path.join(TOKENS_DIR, `${athleteId}.json`), 'utf8'));
+  } catch { return null; }
+}
 
-// Refresh the access token if expired
-async function getAccessToken() {
+function saveUserTokens(athleteId, data) {
+  fs.writeFileSync(path.join(TOKENS_DIR, `${athleteId}.json`), JSON.stringify(data, null, 2));
+}
+
+function getAllUserIds() {
+  try {
+    return fs.readdirSync(TOKENS_DIR)
+      .filter(f => f.endsWith('.json'))
+      .map(f => f.replace('.json', ''));
+  } catch { return []; }
+}
+
+// --- Token refresh ---
+
+async function getAccessToken(athleteId) {
+  const tokenData = loadUserTokens(athleteId);
   if (!tokenData) return null;
 
   const now = Math.floor(Date.now() / 1000);
@@ -61,33 +50,37 @@ async function getAccessToken() {
       refresh_token: tokenData.refresh_token,
       grant_type: 'refresh_token',
     });
-    tokenData = { ...tokenData, ...response.data };
-    fs.writeFileSync(TOKENS_PATH, JSON.stringify(tokenData, null, 2));
-    return tokenData.access_token;
+    const updated = { ...tokenData, ...response.data };
+    saveUserTokens(athleteId, updated);
+    return updated.access_token;
   } catch (err) {
-    console.error('Token refresh failed:', err.response?.data || err.message);
+    console.error(`Token refresh failed for ${athleteId}:`, err.response?.data || err.message);
     return null;
   }
 }
 
-// Fetch all rides and write static JSON files
-async function refreshRideData() {
-  const token = await getAccessToken();
+// --- Data fetching ---
+
+async function refreshRideData(athleteId) {
+  const token = await getAccessToken(athleteId);
   if (!token) {
-    console.log('Refresh skipped: not authenticated');
+    console.log(`Refresh skipped for ${athleteId}: not authenticated`);
     return;
   }
+
+  const userDataDir = path.join(DATA_DIR, String(athleteId));
+  fs.mkdirSync(userDataDir, { recursive: true });
 
   try {
     // Fetch profile
     const { data: profile } = await axios.get('https://www.strava.com/api/v3/athlete', {
       headers: { Authorization: `Bearer ${token}` },
     });
-    fs.writeFileSync(path.join(DATA_DIR, 'profile.json'), JSON.stringify(profile, null, 2));
+    fs.writeFileSync(path.join(userDataDir, 'profile.json'), JSON.stringify(profile, null, 2));
 
-    // Fetch all activities, collect ride IDs
+    // Fetch all activities using summary polylines
     let page = 1;
-    const rides = [];
+    const features = [];
 
     while (true) {
       const { data } = await axios.get('https://www.strava.com/api/v3/athlete/activities', {
@@ -95,30 +88,10 @@ async function refreshRideData() {
         params: { per_page: 200, page },
       });
 
-      console.log(`Refresh: page ${page}, ${data.length} activities`);
+      console.log(`[${athleteId}] page ${page}, ${data.length} activities`);
 
       for (const a of data) {
         if ((a.type === 'Ride' || a.sport_type === 'Ride') && a.map?.summary_polyline) {
-          rides.push(a);
-        }
-      }
-
-      if (data.length < 200) break;
-      page++;
-    }
-
-    console.log(`Found ${rides.length} rides, fetching detailed polylines...`);
-
-    // Fetch detailed polyline for each ride
-    const features = [];
-    for (let i = 0; i < rides.length; i++) {
-      const a = rides[i];
-      try {
-        const { data: detail } = await axios.get(`https://www.strava.com/api/v3/activities/${a.id}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const poly = detail.map?.polyline || detail.map?.summary_polyline;
-        if (poly) {
           features.push({
             type: 'Feature',
             properties: {
@@ -129,42 +102,149 @@ async function refreshRideData() {
               elapsed_time: a.elapsed_time,
               elevation_gain: a.total_elevation_gain,
             },
-            geometry: polyline.toGeoJSON(poly),
+            geometry: polyline.toGeoJSON(a.map.summary_polyline),
           });
         }
-        if ((i + 1) % 20 === 0) console.log(`  ${i + 1}/${rides.length} detailed polylines fetched`);
-      } catch (err) {
-        console.warn(`  Skipped activity ${a.id}: ${err.response?.status || err.message}`);
       }
+
+      if (data.length < 200) break;
+      page++;
     }
 
     const geojson = { type: 'FeatureCollection', features };
-    fs.writeFileSync(path.join(DATA_DIR, 'rides.json'), JSON.stringify(geojson));
-    console.log(`Refreshed: ${features.length} rides saved at ${new Date().toLocaleTimeString()}`);
+    fs.writeFileSync(path.join(userDataDir, 'rides.json'), JSON.stringify(geojson));
+    console.log(`[${athleteId}] Refreshed: ${features.length} rides saved`);
   } catch (err) {
-    console.error('Refresh failed:', err.response?.data || err.message);
+    console.error(`[${athleteId}] Refresh failed:`, err.response?.data || err.message);
   }
 }
 
-// Check auth status
-app.get('/api/status', (req, res) => {
-  res.json({ authenticated: !!tokenData });
+async function refreshAllUsers() {
+  const userIds = getAllUserIds();
+  console.log(`Daily refresh: ${userIds.length} user(s)`);
+  for (const id of userIds) {
+    await refreshRideData(id);
+  }
+}
+
+// --- Legacy migration ---
+
+function migrateLegacyData() {
+  const legacyTokensPath = path.join(__dirname, '.tokens.json');
+  if (!fs.existsSync(legacyTokensPath)) return;
+
+  try {
+    const legacy = JSON.parse(fs.readFileSync(legacyTokensPath, 'utf8'));
+    const athleteId = legacy.athlete?.id;
+    if (!athleteId) return;
+
+    const newTokenPath = path.join(TOKENS_DIR, `${athleteId}.json`);
+    if (!fs.existsSync(newTokenPath)) {
+      saveUserTokens(athleteId, legacy);
+    }
+
+    const userDataDir = path.join(DATA_DIR, String(athleteId));
+    fs.mkdirSync(userDataDir, { recursive: true });
+
+    const oldRides = path.join(DATA_DIR, 'rides.json');
+    const oldProfile = path.join(DATA_DIR, 'profile.json');
+    if (fs.existsSync(oldRides) && !fs.existsSync(path.join(userDataDir, 'rides.json'))) {
+      fs.renameSync(oldRides, path.join(userDataDir, 'rides.json'));
+    }
+    if (fs.existsSync(oldProfile) && !fs.existsSync(path.join(userDataDir, 'profile.json'))) {
+      fs.renameSync(oldProfile, path.join(userDataDir, 'profile.json'));
+    }
+
+    console.log(`Migrated legacy data for athlete ${athleteId}`);
+  } catch (e) {
+    console.warn('Legacy migration failed:', e.message);
+  }
+}
+
+// --- Schedule daily refresh at midnight PST ---
+
+function scheduleMidnightRefresh() {
+  const now = new Date();
+  // PST is UTC-8, PDT is UTC-7. Use America/Los_Angeles for correct offset.
+  const pstNow = new Date(now.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
+  const midnight = new Date(pstNow);
+  midnight.setDate(midnight.getDate() + 1);
+  midnight.setHours(0, 0, 0, 0);
+
+  // Convert back to local time for setTimeout
+  const msUntilMidnight = midnight.getTime() - pstNow.getTime();
+  console.log(`Next refresh in ${Math.round(msUntilMidnight / 60000)} minutes (midnight PST)`);
+
+  setTimeout(() => {
+    refreshAllUsers();
+    // Then repeat every 24 hours
+    setInterval(refreshAllUsers, 24 * 60 * 60 * 1000);
+  }, msUntilMidnight);
+}
+
+// --- Routes ---
+
+app.use(express.json());
+
+// Explicit page routes
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+app.get('/join', (req, res) => res.sendFile(path.join(__dirname, 'public', 'join.html')));
+app.get('/about-us', (req, res) => res.sendFile(path.join(__dirname, 'public', 'about.html')));
+
+// Redirect user to Strava OAuth
+app.get('/auth/strava', (req, res) => {
+  const redirectUri = `${req.protocol}://${req.get('host')}/auth/callback`;
+  const authUrl = `https://www.strava.com/oauth/authorize?client_id=${process.env.STRAVA_CLIENT_ID}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&approval_prompt=force&scope=read,activity:read`;
+  res.redirect(authUrl);
 });
 
-// Serve static files after API routes
+// OAuth callback — exchange code for tokens, redirect to user page
+app.get('/auth/callback', async (req, res) => {
+  const { code } = req.query;
+  if (!code) return res.status(400).send('Missing authorization code');
+
+  try {
+    const redirectUri = `${req.protocol}://${req.get('host')}/auth/callback`;
+    const response = await axios.post('https://www.strava.com/oauth/token', {
+      client_id: process.env.STRAVA_CLIENT_ID,
+      client_secret: process.env.STRAVA_CLIENT_SECRET,
+      code,
+      grant_type: 'authorization_code',
+      redirect_uri: redirectUri,
+    });
+
+    const athleteId = response.data.athlete.id;
+    saveUserTokens(athleteId, response.data);
+
+    // Write profile from OAuth response
+    const userDataDir = path.join(DATA_DIR, String(athleteId));
+    fs.mkdirSync(userDataDir, { recursive: true });
+    fs.writeFileSync(path.join(userDataDir, 'profile.json'), JSON.stringify(response.data.athlete, null, 2));
+
+    // Fetch ride data in the background
+    refreshRideData(athleteId);
+
+    res.redirect(`/${athleteId}`);
+  } catch (err) {
+    console.error('Token exchange failed:', err.response?.data || err.message);
+    res.status(500).send('Authentication failed');
+  }
+});
+
+// Static file serving (data files, config.js, favicon, etc.)
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Dynamic user map page — must come after static routes
+app.get('/:id', (req, res, next) => {
+  if (!/^\d+$/.test(req.params.id)) return next();
+  res.sendFile(path.join(__dirname, 'public', 'map.html'));
+});
+
+// --- Start ---
+
 app.listen(PORT, () => {
-  console.log(`Strava Buddy running at http://localhost:${PORT}`);
-  console.log(`Auto-refresh every ${REFRESH_INTERVAL / 60000} minutes`);
+  console.log(`ridesometime running at http://localhost:${PORT}`);
 
-  // Refresh on startup only if data files are missing
-  const ridesExist = fs.existsSync(path.join(DATA_DIR, 'rides.json'));
-  if (!ridesExist) {
-    console.log('No ride data found, fetching now...');
-    refreshRideData();
-  }
-
-  // Schedule hourly refresh
-  setInterval(refreshRideData, REFRESH_INTERVAL);
+  migrateLegacyData();
+  scheduleMidnightRefresh();
 });
