@@ -301,7 +301,7 @@ async function refreshRideData(athleteId) {
       console.log(`[${athleteId}] page ${page}, ${data.length} activities`);
 
       for (const a of data) {
-        if ((a.type === 'Ride' || a.sport_type === 'Ride') && a.map?.summary_polyline) {
+        if ((a.type === 'Ride' || a.sport_type === 'Ride') && a.map?.summary_polyline && a.visibility === 'everyone') {
           features.push({
             type: 'Feature',
             properties: {
@@ -466,10 +466,6 @@ app.use('/data', express.static(DATA_DIR));
 // Static file serving (favicon, etc.)
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Track last refresh per user to avoid hammering the API
-const lastRefresh = {};
-const REFRESH_COOLDOWN = 5 * 60 * 1000; // 5 minutes
-
 // Dynamic user map page — must come after static routes
 app.get('/:id', (req, res, next) => {
   let athleteId = req.params.id;
@@ -479,12 +475,8 @@ app.get('/:id', (req, res, next) => {
   const userDataDir = path.join(DATA_DIR, athleteId);
   if (!fs.existsSync(path.join(userDataDir, 'profile.json'))) return res.redirect('/oops');
 
-  // Trigger background refresh if cooldown has passed
-  const now = Date.now();
-  if (!lastRefresh[athleteId] || now - lastRefresh[athleteId] > REFRESH_COOLDOWN) {
-    lastRefresh[athleteId] = now;
-    refreshRideData(athleteId);
-  }
+  // Trigger background refresh
+  refreshRideData(athleteId);
 
   // Read map.html and inject the athlete ID
   let html = fs.readFileSync(path.join(__dirname, 'public', 'map.html'), 'utf8');
