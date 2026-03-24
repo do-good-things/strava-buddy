@@ -11,8 +11,6 @@ const PORT = process.env.PORT || 3000;
 const STORAGE_DIR = process.env.STORAGE_DIR || __dirname;
 const DATA_DIR = path.join(STORAGE_DIR, 'data');
 const TOKENS_DIR = path.join(STORAGE_DIR, '.tokens');
-const VANITY_PATH = path.join(STORAGE_DIR, '.vanity.json');
-const VANITY_LIMIT = 10;
 
 // Ensure directories exist
 fs.mkdirSync(TOKENS_DIR, { recursive: true });
@@ -38,43 +36,6 @@ function getAllUserIds() {
   } catch { return []; }
 }
 
-// --- Vanity URL helpers ---
-
-function loadVanity() {
-  try { return JSON.parse(fs.readFileSync(VANITY_PATH, 'utf8')); } catch { return {}; }
-}
-
-function saveVanity(map) {
-  fs.writeFileSync(VANITY_PATH, JSON.stringify(map, null, 2));
-}
-
-function assignVanity(athleteId, firstname) {
-  const map = loadVanity();
-  // Already has a vanity name
-  if (Object.values(map).includes(String(athleteId))) return;
-  // Limit reached
-  if (Object.keys(map).length >= VANITY_LIMIT) return;
-
-  let name = firstname.toLowerCase().replace(/[^a-z]/g, '');
-  if (!name) return;
-
-  // Handle collisions by appending a number
-  let candidate = name;
-  let i = 2;
-  while (map[candidate]) {
-    candidate = name + i;
-    i++;
-  }
-
-  map[candidate] = String(athleteId);
-  saveVanity(map);
-  console.log(`Vanity URL assigned: /${candidate} -> ${athleteId}`);
-}
-
-function resolveVanity(name) {
-  const map = loadVanity();
-  return map[name] || null;
-}
 
 // --- Token refresh ---
 
@@ -416,10 +377,6 @@ function migrateLegacyData() {
       fs.renameSync(oldProfile, path.join(userDataDir, 'profile.json'));
     }
 
-    // Assign vanity URL for legacy user
-    if (legacy.athlete?.firstname) {
-      assignVanity(athleteId, legacy.athlete.firstname);
-    }
     console.log(`Migrated legacy data for athlete ${athleteId}`);
   } catch (e) {
     console.warn('Legacy migration failed:', e.message);
@@ -483,9 +440,6 @@ app.get('/auth/callback', async (req, res) => {
     const athleteId = athlete.id;
     saveUserTokens(athleteId, response.data);
 
-    // Assign vanity URL for first 10 users
-    assignVanity(athleteId, athlete.firstname);
-
     // Write profile from OAuth response
     const userDataDir = path.join(DATA_DIR, String(athleteId));
     fs.mkdirSync(userDataDir, { recursive: true });
@@ -494,10 +448,7 @@ app.get('/auth/callback', async (req, res) => {
     // Fetch ride data in the background
     refreshRideData(athleteId);
 
-    // Redirect to vanity URL if available, otherwise athlete ID
-    const vanity = loadVanity();
-    const vanityName = Object.entries(vanity).find(([, id]) => id === String(athleteId));
-    res.redirect(vanityName ? `/${vanityName[0]}` : `/${athleteId}`);
+    res.redirect(`/${athleteId}`);
   } catch (err) {
     console.error('Token exchange failed:', err.response?.data || err.message);
     res.status(500).send('Authentication failed');
@@ -523,12 +474,7 @@ const REFRESH_COOLDOWN = 5 * 60 * 1000; // 5 minutes
 app.get('/:id', (req, res, next) => {
   let athleteId = req.params.id;
 
-  // Check if it's a vanity name
-  if (!/^\d+$/.test(athleteId)) {
-    const resolved = resolveVanity(athleteId.toLowerCase());
-    if (!resolved) return res.redirect('/oops');
-    athleteId = resolved;
-  }
+  if (!/^\d+$/.test(athleteId)) return res.redirect('/oops');
 
   const userDataDir = path.join(DATA_DIR, athleteId);
   if (!fs.existsSync(path.join(userDataDir, 'profile.json'))) return res.redirect('/oops');
@@ -540,7 +486,7 @@ app.get('/:id', (req, res, next) => {
     refreshRideData(athleteId);
   }
 
-  // Read map.html and inject the athlete ID so vanity URLs work
+  // Read map.html and inject the athlete ID
   let html = fs.readFileSync(path.join(__dirname, 'public', 'map.html'), 'utf8');
   html = html.replace(
     "const ATHLETE_ID = window.location.pathname.replace(/^\\//, '').replace(/\\/$/, '');",
