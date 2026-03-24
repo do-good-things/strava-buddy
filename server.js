@@ -313,7 +313,7 @@ async function computeRegions(features) {
 async function refreshRideData(athleteId) {
   const token = await getAccessToken(athleteId);
   if (!token) {
-    console.log(`Refresh skipped for ${athleteId}: not authenticated`);
+    console.log(`[${athleteId}] Refresh skipped: not authenticated`);
     return;
   }
 
@@ -369,7 +369,14 @@ async function refreshRideData(athleteId) {
 
     console.log(`[${athleteId}] Refreshed: ${features.length} rides, ${regions.length} regions`);
   } catch (err) {
-    console.error(`[${athleteId}] Refresh failed:`, err.response?.data || err.message);
+    const status = err.response?.status;
+    if (status === 401 || status === 403) {
+      // User has revoked access — clean up tokens
+      console.log(`[${athleteId}] Access revoked, removing tokens`);
+      try { fs.unlinkSync(path.join(TOKENS_DIR, `${athleteId}.json`)); } catch {}
+    } else {
+      console.error(`[${athleteId}] Refresh failed:`, err.response?.data || err.message);
+    }
   }
 }
 
@@ -448,6 +455,7 @@ app.use(express.json());
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 app.get('/join', (req, res) => res.sendFile(path.join(__dirname, 'public', 'join.html')));
 app.get('/about', (req, res) => res.sendFile(path.join(__dirname, 'public', 'about.html')));
+app.get('/oops', (req, res) => res.sendFile(path.join(__dirname, 'public', 'oops.html')));
 
 // Redirect user to Strava OAuth
 app.get('/auth/strava', (req, res) => {
@@ -507,6 +515,10 @@ app.use('/data', express.static(DATA_DIR));
 // Static file serving (favicon, etc.)
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Track last refresh per user to avoid hammering the API
+const lastRefresh = {};
+const REFRESH_COOLDOWN = 5 * 60 * 1000; // 5 minutes
+
 // Dynamic user map page — must come after static routes
 app.get('/:id', (req, res, next) => {
   let athleteId = req.params.id;
@@ -514,12 +526,19 @@ app.get('/:id', (req, res, next) => {
   // Check if it's a vanity name
   if (!/^\d+$/.test(athleteId)) {
     const resolved = resolveVanity(athleteId.toLowerCase());
-    if (!resolved) return next();
+    if (!resolved) return res.redirect('/oops');
     athleteId = resolved;
   }
 
   const userDataDir = path.join(DATA_DIR, athleteId);
-  if (!fs.existsSync(path.join(userDataDir, 'profile.json'))) return res.redirect('/');
+  if (!fs.existsSync(path.join(userDataDir, 'profile.json'))) return res.redirect('/oops');
+
+  // Trigger background refresh if cooldown has passed
+  const now = Date.now();
+  if (!lastRefresh[athleteId] || now - lastRefresh[athleteId] > REFRESH_COOLDOWN) {
+    lastRefresh[athleteId] = now;
+    refreshRideData(athleteId);
+  }
 
   // Read map.html and inject the athlete ID so vanity URLs work
   let html = fs.readFileSync(path.join(__dirname, 'public', 'map.html'), 'utf8');
@@ -529,6 +548,9 @@ app.get('/:id', (req, res, next) => {
   );
   res.type('html').send(html);
 });
+
+// Catch-all 404
+app.use((req, res) => res.redirect('/oops'));
 
 // --- Start ---
 
