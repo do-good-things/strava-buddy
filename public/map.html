@@ -17,6 +17,8 @@
 
 
     .site-blurb { font-size: 0.8rem; color: #aaa; letter-spacing: 0.02em; }
+    .back-link { font-size: 0.8rem; color: #ccc; text-decoration: none; }
+    @media (hover: hover) { .back-link:hover { color: #999; } }
     .map-row { display: flex; flex: 1; gap: 1rem; }
     .regions { display: flex; flex-direction: column; gap: 0.25rem; padding-top: 0.25rem; }
     .region-btn { padding: 0.3rem 0.1rem; background: none; border: none; font-size: 1rem; cursor: pointer; color: #999; transition: color 0.15s; text-transform: lowercase; font-family: inherit; text-align: right; white-space: nowrap; }
@@ -78,23 +80,15 @@
     <div id="regions" class="regions"></div>
     </div>
     <div class="site-footer">
-      <div class="site-blurb">a collection of places explored via bicycle</div>
+      <a class="back-link" href="/">back</a>
     </div>
   </div>
 
   <script src="/config.js"></script>
   <script>
     const ATHLETE_ID = window.location.pathname.replace(/^\//, '').replace(/\/$/, '');
-
-    const REGIONS = [
-      { name: 'Bay Area', bounds: [[-122.9, 37.2], [-122.2, 38.15]] },
-      { name: 'Washington', bounds: [[-123.5, 47.0], [-120.5, 50.2]] },
-      { name: 'Japan', bounds: [[136.8, 34.3], [139.9, 35.9]] },
-      { name: 'Tahoe', bounds: [[-120.3, 39.1], [-120.0, 39.7]] },
-      { name: 'San Diego', bounds: [[-117.3, 32.7], [-116.6, 33.2]] },
-      { name: 'Switzerland', bounds: [[6.8, 46.4], [8.4, 47.4]] },
-    ];
     const HOME = { center: [-122.52, 37.82], zoom: window.innerWidth <= 600 ? 10 : 11 };
+    let REGIONS = [];
     const LINE_COLOR = ['interpolate', ['linear'], ['get', 'age'], 0, '#4060e0', 0.5, '#e040a0', 1, '#fc4c02'];
     const NO_MATCH = ['==', ['id'], -1];
 
@@ -137,11 +131,16 @@
         console.warn('Could not load profile:', e);
       }
 
-      // Load rides
+      // Load rides and regions
       try {
         geojson = await fetch(`/data/${ATHLETE_ID}/rides.json`).then(r => r.json());
       } catch (e) {
         geojson = { type: 'FeatureCollection', features: [] };
+      }
+      try {
+        REGIONS = await fetch(`/data/${ATHLETE_ID}/regions.json`).then(r => r.json());
+      } catch (e) {
+        REGIONS = [];
       }
 
       // Split rides at large GPS gaps to avoid long straight lines over water/pauses
@@ -200,8 +199,7 @@
         }
       });
       REGIONS.forEach(r => {
-        if (!counts[r.name]) return;
-        addTab(regionsEl, r.name, counts[r.name], (btn) => {
+        addTab(regionsEl, r.name, counts[r.name] || r.count || 0, (btn) => {
           hideRideDetail();
           if (btn.classList.contains('active')) {
             setActiveTab(document.querySelector('.region-btn'));
