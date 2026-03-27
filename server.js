@@ -20,6 +20,12 @@ try {
 
 app.use(express.json());
 
+// Serve Mapbox token to the frontend
+app.get('/config.js', (req, res) => {
+  res.type('application/javascript');
+  res.send(`const MAPBOX_TOKEN = ${JSON.stringify(process.env.MAPBOX_TOKEN)};`);
+});
+
 // Redirect user to Strava OAuth
 app.get('/auth/strava', (req, res) => {
   const authUrl = `https://www.strava.com/oauth/authorize?client_id=${process.env.STRAVA_CLIENT_ID}&response_type=code&redirect_uri=http://localhost:${PORT}/auth/callback&approval_prompt=force&scope=read,activity:read`;
