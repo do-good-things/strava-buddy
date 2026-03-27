@@ -123,7 +123,9 @@
     }
 
     async function init() {
-      geojson = await fetch('/data/rides.json').then(r => r.json());
+      const res = await fetch('/data/rides.json');
+      if (!res.ok) { console.error('Failed to load ride data'); return; }
+      geojson = await res.json();
 
       // Split rides at large GPS gaps to avoid long straight lines over water/pauses
       geojson.features.forEach(f => {
@@ -235,7 +237,7 @@
     function fmtTime(s) { const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60); return h > 0 ? `${h}h ${m}m` : `${m}m`; }
 
     function toGpx(feature) {
-      const name = feature.properties.name.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const name = feature.properties.name.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
       const geom = feature.geometry;
       const segments = geom.type === 'MultiLineString' ? geom.coordinates : [geom.coordinates];
       const trksegs = segments.map(seg =>
