@@ -11,6 +11,9 @@ app.get('/config.js', (req, res) => {
   res.send(`const MAPBOX_TOKEN = ${JSON.stringify(process.env.MAPBOX_TOKEN)};`);
 });
 
+// Block direct access to profile.json (contains PII)
+app.get('/data/profile.json', (req, res) => res.status(404).end());
+
 // Serve static files
 app.use(express.static(path.join(__dirname, 'public')));
 

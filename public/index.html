@@ -8,69 +8,25 @@
   <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌞</text></svg>">
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.4.0/mapbox-gl.css" rel="stylesheet">
   <link href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.3/mapbox-gl-geocoder.css" rel="stylesheet">
+  <link href="/css/styles.css" rel="stylesheet">
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.4.0/mapbox-gl.js"></script>
   <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.3/mapbox-gl-geocoder.min.js"></script>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fff; color: #333; min-height: 100vh; display: flex; flex-direction: column; }
-    .container { max-width: 1400px; margin: 0 auto; padding: 2rem; width: 100%; flex: 1; display: flex; flex-direction: column; }
-
-
-    .site-blurb { font-size: 0.8rem; color: #aaa; letter-spacing: 0.02em; }
-    .map-row { display: flex; flex: 1; gap: 1rem; }
-    .regions { display: flex; flex-direction: column; gap: 0.25rem; padding-top: 0.25rem; }
-    .region-btn { padding: 0.3rem 0.1rem; background: none; border: none; font-size: 1rem; cursor: pointer; color: #999; transition: color 0.15s; text-transform: lowercase; font-family: inherit; text-align: right; white-space: nowrap; }
-    @media (hover: hover) { .region-btn:hover { color: #e040a0; } }
-    .region-btn.active { color: #fc4c02; }
-    .region-btn .count { font-size: 0.7rem; margin-left: 3px; color: #ccc; }
-    .region-btn.active .count { color: #f4a57a; }
-    .map-wrap { position: relative; flex: 1; display: flex; flex-direction: column; min-width: 0; }
-    .site-footer { margin-top: 1.25rem; }
-    .profile-card { position: absolute; top: 12px; left: 12px; z-index: 1; background: #fff; padding: 0.5rem 0.7rem; border-radius: 4px; border: none; box-shadow: 0 0 0 2px rgba(0,0,0,0.1); display: flex; align-items: center; gap: 0.5rem; text-decoration: none; color: inherit; transition: background 0.15s; width: auto; }
-    @media (hover: hover) { .profile-card:hover { background: #f0f0f0; } }
-    .profile-card img { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; }
-    .profile-card .profile-info { display: flex; flex-direction: column; }
-    .profile-card .profile-name { font-size: 0.8rem; font-weight: 600; color: #333; }
-    .profile-card .profile-city { font-size: 0.7rem; color: #999; }
-    .ride-detail { display: none; position: absolute; top: 12px; left: 12px; z-index: 1; background: #fff; padding: 0.6rem 0.9rem; border-radius: 4px; border: none; box-shadow: 0 0 0 2px rgba(0,0,0,0.1); max-width: 280px; }
-    .ride-detail.visible { display: block; }
-    .ride-detail .ride-name { font-size: 0.85rem; font-weight: 600; margin-bottom: 0.3rem; }
-    .ride-detail .ride-stats { font-size: 0.75rem; color: #777; line-height: 1.5; }
-    .ride-detail .gpx-btn { display: block; width: 100%; margin-top: 0.4rem; padding: 0.25rem 0.5rem; font-size: 0.7rem; font-family: inherit; text-transform: lowercase; color: #999; background: none; border: 1px solid #ddd; border-radius: 3px; cursor: pointer; transition: color 0.15s, border-color 0.15s; }
-    @media (hover: hover) { .ride-detail .gpx-btn:hover { color: #fc4c02; border-color: #fc4c02; } }
-    #map { width: 100%; flex: 1; min-height: 500px; border-radius: 4px; box-shadow: 0 0 0 2px rgba(0,0,0,0.1); }
-    #map .mapboxgl-canvas-container,
-    #map .mapboxgl-canvas-container.mapboxgl-interactive { cursor: default; }
-    .mapboxgl-ctrl-top-right { top: 2px; }
-    .mapboxgl-ctrl-geocoder { box-shadow: 0 0 0 2px rgba(0,0,0,0.1); }
-    .mapboxgl-ctrl-geocoder input[type="text"] { outline: none; }
-    .mapboxgl-ctrl-geocoder input[type="text"]:focus { outline: none; }
-
-    @media (max-width: 600px) {
-      html, body { height: 100svh; min-height: 0; margin: 0; overflow: hidden; }
-      body { display: flex; flex-direction: column; padding-bottom: env(safe-area-inset-bottom); }
-      .container { padding: 0.75rem; flex: 1; display: flex; flex-direction: column; min-height: 0; gap: 0.5rem; }
-      .map-row { flex-direction: column; gap: 0.5rem; flex: 1; min-height: 0; }
-      .map-wrap { flex: 1; min-height: 0; }
-      .regions { flex-direction: row; flex-wrap: wrap; gap: 0.5rem; flex-shrink: 0; }
-      .region-btn { font-size: 0.75rem; }
-      .site-footer { margin: 0; order: -1; flex-shrink: 0; }
-      .site-blurb { font-size: 0.8rem; padding: 0.3rem 0; }
-      #map { min-height: 0; flex: 1; border-radius: 8px; }
-    }
-  </style>
 </head>
 <body>
   <div class="container">
+    <p class="site-subheading">explore my personal heatmap of the world</p>
     <div class="map-row">
     <div class="map-wrap">
-      <a class="profile-card" id="profile-card" href="https://www.strava.com/athletes/118918676" target="_blank" rel="noopener">
-        <img src="https://dgalywyr863hv.cloudfront.net/pictures/athletes/118918676/28452476/15/medium.jpg" alt="Sarah Snow">
-        <div class="profile-info">
-          <span class="profile-name">Sarah Snow</span>
-          <span class="profile-city">San Francisco</span>
-        </div>
-      </a>
+      <div class="info-panel" id="info-panel">
+        <a class="profile-card" id="profile-card" href="https://www.strava.com/athletes/118918676" target="_blank" rel="noopener">
+          <img src="https://dgalywyr863hv.cloudfront.net/pictures/athletes/118918676/28452476/15/medium.jpg" alt="Sarah Snow">
+          <div class="profile-info">
+            <span class="profile-name">Sarah Snow</span>
+            <span class="profile-city">San Francisco</span>
+          </div>
+        </a>
+        <div class="stats-card" id="stats-card"></div>
+      </div>
       <div id="ride-detail" class="ride-detail">
         <div class="ride-name" id="ride-name"></div>
         <div class="ride-stats" id="ride-stats"></div>
@@ -80,218 +36,9 @@
     </div>
     <div id="regions" class="regions"></div>
     </div>
-    <div class="site-footer">
-      <div class="site-blurb">🚴‍♀️🌍💗 a collection of places explored via bicycle</div>
-    </div>
   </div>
 
   <script src="/config.js"></script>
-  <script>
-    const REGIONS = [
-      { name: 'Bay Area', bounds: [[-122.9, 37.2], [-122.2, 38.15]] },
-      { name: 'Washington', bounds: [[-123.5, 47.0], [-120.5, 50.2]] },
-      { name: 'Japan', bounds: [[136.8, 34.3], [139.9, 35.9]] },
-      { name: 'Tahoe', bounds: [[-120.3, 39.1], [-120.0, 39.7]] },
-      { name: 'San Diego', bounds: [[-117.3, 32.7], [-116.3, 33.8]] },
-      { name: 'Switzerland', bounds: [[6.8, 46.4], [8.4, 47.4]] },
-    ];
-    const HOME = { center: [-122.52, 37.82], zoom: window.innerWidth <= 600 ? 10 : 11 };
-    const LINE_COLOR = ['interpolate', ['linear'], ['get', 'age'], 0, '#4060e0', 0.5, '#e040a0', 1, '#fc4c02'];
-    const NO_MATCH = ['==', ['id'], -1];
-
-    let map, geojson, activeRegion = null, selectedId = null;
-
-    // Split a LineString into MultiLineString when consecutive points are > maxGapKm apart
-    function splitGaps(coords, maxGapKm = 5) {
-      if (coords.length < 2) return [coords];
-      const segments = [];
-      let seg = [coords[0]];
-      for (let i = 1; i < coords.length; i++) {
-        const [lng1, lat1] = coords[i - 1], [lng2, lat2] = coords[i];
-        const dlat = (lat2 - lat1) * Math.PI / 180, dlng = (lng2 - lng1) * Math.PI / 180;
-        const a = Math.sin(dlat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dlng / 2) ** 2;
-        const km = 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        if (km > maxGapKm) {
-          if (seg.length >= 2) segments.push(seg);
-          seg = [coords[i]];
-        } else {
-          seg.push(coords[i]);
-        }
-      }
-      if (seg.length >= 2) segments.push(seg);
-      return segments;
-    }
-
-    async function init() {
-      const res = await fetch('/data/rides.json');
-      if (!res.ok) { console.error('Failed to load ride data'); return; }
-      geojson = await res.json();
-
-      // Split rides at large GPS gaps to avoid long straight lines over water/pauses
-      geojson.features.forEach(f => {
-        if (f.geometry.type === 'LineString') {
-          const segments = splitGaps(f.geometry.coordinates);
-          if (segments.length > 1) {
-            f.geometry = { type: 'MultiLineString', coordinates: segments };
-          } else if (segments.length === 1) {
-            f.geometry.coordinates = segments[0];
-          }
-        }
-      });
-
-      // Tag rides with region + age
-      const dates = geojson.features.map(f => new Date(f.properties.date).getTime());
-      const minDate = Math.min(...dates), dateRange = Math.max(...dates) - minDate || 1;
-      geojson.features.forEach((f, i) => {
-        f.id = i;
-        const allCoords = f.geometry.type === 'MultiLineString' ? f.geometry.coordinates.flat() : f.geometry.coordinates;
-        const [lng, lat] = allCoords[Math.floor(allCoords.length / 2)] || [0, 0];
-        f.properties.region = (REGIONS.find(r => {
-          const [[minLng, minLat], [maxLng, maxLat]] = r.bounds;
-          return lat >= minLat && lat <= maxLat && lng >= minLng && lng <= maxLng;
-        }) || { name: 'other' }).name;
-        f.properties.age = (new Date(f.properties.date).getTime() - minDate) / dateRange;
-      });
-
-      // Count rides per region
-      const counts = {};
-      geojson.features.forEach(f => { counts[f.properties.region] = (counts[f.properties.region] || 0) + 1; });
-
-      // Build tabs
-      const regionsEl = document.getElementById('regions');
-      addTab(regionsEl, 'all', geojson.features.length, (btn) => {
-        setActiveTab(btn);
-        activeRegion = null;
-        selectedId = null;
-        hideRideDetail();
-        applyFilter(null);
-        map.flyTo({ ...HOME, duration: 1500 });
-      });
-      REGIONS.forEach(r => {
-        addTab(regionsEl, r.name, counts[r.name] || 0, (btn) => {
-          hideRideDetail();
-          if (btn.classList.contains('active')) {
-            setActiveTab(document.querySelector('.region-btn'));
-            activeRegion = null;
-            selectedId = null;
-            applyFilter(null);
-          } else {
-            setActiveTab(btn);
-            activeRegion = r;
-            selectedId = null;
-            applyFilter(['==', ['get', 'region'], r.name]);
-            map.fitBounds(r.bounds, { padding: 40, duration: 1500 });
-          }
-        });
-      });
-
-      // Init map
-      mapboxgl.accessToken = MAPBOX_TOKEN;
-      map = new mapboxgl.Map({ container: 'map', style: 'mapbox://styles/mapbox/light-v11', ...HOME });
-      map.addControl(new MapboxGeocoder({ accessToken: MAPBOX_TOKEN, mapboxgl, marker: false, collapsed: true, placeholder: 'Search location...', flyTo: { speed: 5, curve: 1, zoom: 11 } }), 'top-right');
-      map.addControl(new mapboxgl.NavigationControl());
-      const geoInput = document.querySelector('.mapboxgl-ctrl-geocoder input');
-      if (geoInput) { geoInput.spellcheck = false; geoInput.autocomplete = 'off'; geoInput.autocorrect = 'off'; geoInput.autocapitalize = 'off'; }
-
-      map.on('load', () => {
-        map.addSource('rides', { type: 'geojson', data: geojson, tolerance: 0.5 });
-        map.addLayer({ id: 'rides-hit', type: 'line', source: 'rides', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': '#000', 'line-width': 14, 'line-opacity': 0 } });
-        map.addLayer({ id: 'rides-layer', type: 'line', source: 'rides', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': LINE_COLOR, 'line-width': 2, 'line-opacity': 0.6 } });
-        map.addLayer({ id: 'rides-hover', type: 'line', source: 'rides', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': LINE_COLOR, 'line-width': 3, 'line-opacity': 0.9 }, filter: NO_MATCH });
-
-        // Hover
-        map.on('mouseenter', 'rides-hit', () => map.getCanvas().style.cursor = 'pointer');
-        map.on('mouseleave', 'rides-hit', () => { map.getCanvas().style.cursor = ''; map.setFilter('rides-hover', NO_MATCH); });
-        map.on('mousemove', 'rides-hit', e => { if (e.features.length) map.setFilter('rides-hover', ['==', ['id'], e.features[0].id]); });
-
-        // Click ride: isolate + zoom
-        map.on('click', 'rides-hit', e => {
-          if (!e.features.length) return;
-          selectedId = e.features[0].id;
-          setActiveTab(document.querySelector('.region-btn'));
-          activeRegion = null;
-          map.setFilter('rides-layer', ['==', ['id'], selectedId]);
-          map.setFilter('rides-hit', NO_MATCH);
-          map.setFilter('rides-hover', NO_MATCH);
-          map.getCanvas().style.cursor = '';
-          showRideDetail(geojson.features[selectedId].properties);
-          const bounds = new mapboxgl.LngLatBounds();
-          const geom = geojson.features[selectedId].geometry;
-          const clickCoords = geom.type === 'MultiLineString' ? geom.coordinates.flat() : geom.coordinates;
-          clickCoords.forEach(c => bounds.extend(c));
-          map.fitBounds(bounds, { padding: 60, duration: 1000 });
-        });
-
-        // Click empty space: deselect
-        map.on('click', e => {
-          if (selectedId === null) return;
-          if (map.queryRenderedFeatures(e.point, { layers: ['rides-hit'] }).length) return;
-          selectedId = null;
-          hideRideDetail();
-          applyFilter(null);
-        });
-      });
-    }
-
-    function fmtTime(s) { const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60); return h > 0 ? `${h}h ${m}m` : `${m}m`; }
-
-    function toGpx(feature) {
-      const name = feature.properties.name.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
-      const geom = feature.geometry;
-      const segments = geom.type === 'MultiLineString' ? geom.coordinates : [geom.coordinates];
-      const trksegs = segments.map(seg =>
-        '    <trkseg>\n' + seg.map(([lng, lat]) => `      <trkpt lat="${lat}" lon="${lng}"></trkpt>`).join('\n') + '\n    </trkseg>'
-      ).join('\n');
-      return `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="ridesometime" xmlns="http://www.topografix.com/GPX/1/1">\n  <trk>\n    <name>${name}</name>\n${trksegs}\n  </trk>\n</gpx>`;
-    }
-
-    function downloadGpx() {
-      if (selectedId === null) return;
-      const feature = geojson.features[selectedId];
-      const gpx = toGpx(feature);
-      const slug = feature.properties.name.replace(/[^a-z0-9]+/gi, '_').toLowerCase();
-      const blob = new Blob([gpx], { type: 'application/gpx+xml' });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `${slug}.gpx`;
-      a.click();
-      URL.revokeObjectURL(a.href);
-    }
-
-    function showRideDetail(p) {
-      const mi = (p.distance / 1609.34).toFixed(1);
-      document.getElementById('ride-name').textContent = p.name;
-      document.getElementById('ride-stats').innerHTML = `${mi} mi<br>${fmtTime(p.moving_time)} riding time<br>${fmtTime(p.elapsed_time)} total`;
-      document.getElementById('gpx-btn').onclick = downloadGpx;
-      document.getElementById('profile-card').style.display = 'none';
-      document.getElementById('ride-detail').classList.add('visible');
-    }
-
-    function hideRideDetail() {
-      document.getElementById('ride-detail').classList.remove('visible');
-      document.getElementById('profile-card').style.display = '';
-    }
-
-    function addTab(parent, name, count, onClick) {
-      const btn = document.createElement('button');
-      btn.className = 'region-btn' + (name === 'all' ? ' active' : '');
-      btn.innerHTML = `${name}<span class="count">${count}</span>`;
-      btn.addEventListener('click', () => onClick(btn));
-      parent.appendChild(btn);
-    }
-
-    function setActiveTab(btn) {
-      document.querySelectorAll('.region-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-    }
-
-    function applyFilter(filter) {
-      map.setFilter('rides-layer', filter);
-      map.setFilter('rides-hit', filter);
-      map.setFilter('rides-hover', NO_MATCH);
-    }
-
-    init();
-  </script>
+  <script src="/js/app.js"></script>
 </body>
 </html>
