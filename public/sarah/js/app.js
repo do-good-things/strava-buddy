@@ -28,9 +28,9 @@ function splitGaps(coords, maxGapKm = 5) {
 
 async function init() {
   const [ridesRes, ebikeRes, regionsRes] = await Promise.all([
-    fetch('/data/rides.json'),
-    fetch('/data/ebike-rides.json'),
-    fetch('/data/regions.json')
+    fetch('/sarah/data/rides.json'),
+    fetch('/sarah/data/ebike-rides.json'),
+    fetch('/sarah/data/regions.json')
   ]);
   if (!ridesRes.ok) { console.error('Failed to load ride data'); return; }
   geojson = await ridesRes.json();

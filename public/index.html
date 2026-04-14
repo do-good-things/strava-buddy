@@ -2,43 +2,69 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>ridesometime</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ride sometime</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌞</text></svg>">
-  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌞</text></svg>">
-  <link href="https://api.mapbox.com/mapbox-gl-js/v3.4.0/mapbox-gl.css" rel="stylesheet">
-  <link href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.3/mapbox-gl-geocoder.css" rel="stylesheet">
-  <link href="/css/styles.css" rel="stylesheet">
-  <script src="https://api.mapbox.com/mapbox-gl-js/v3.4.0/mapbox-gl.js"></script>
-  <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.3/mapbox-gl-geocoder.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #fff;
+      color: #333;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .profiles {
+      display: flex;
+      gap: 1.5rem;
+      justify-content: center;
+      align-items: center;
+      flex-wrap: wrap;
+      padding: 2rem;
+    }
+    .profile-link {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-decoration: none;
+      color: inherit;
+      padding: 1.5rem 2rem;
+      border-radius: 8px;
+      border: 2px solid #eee;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      min-width: 160px;
+    }
+    .profile-link:hover {
+      border-color: #fc4c02;
+      box-shadow: 0 2px 12px rgba(252, 76, 2, 0.1);
+    }
+    .profile-link img {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      object-fit: cover;
+      margin-bottom: 0.75rem;
+    }
+    .profile-link .name {
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+    .profile-link .subtitle {
+      font-size: 0.8rem;
+      color: #999;
+      margin-top: 0.2rem;
+    }
+  </style>
 </head>
 <body>
-  <div class="container">
-    <p class="site-subheading">explore my personal heatmap of the world</p>
-    <div class="map-row">
-    <div class="map-wrap">
-      <div class="info-panel" id="info-panel">
-        <a class="profile-card" id="profile-card" href="https://www.strava.com/athletes/118918676" target="_blank" rel="noopener">
-          <img src="https://dgalywyr863hv.cloudfront.net/pictures/athletes/118918676/28452476/15/medium.jpg" alt="Sarah Snow">
-          <div class="profile-info">
-            <span class="profile-name">Sarah Snow</span>
-            <span class="profile-city">San Francisco</span>
-          </div>
-        </a>
-        <div class="stats-card" id="stats-card"></div>
-      </div>
-      <div id="ride-detail" class="ride-detail">
-        <div class="ride-name" id="ride-name"></div>
-        <div class="ride-stats" id="ride-stats"></div>
-        <button class="gpx-btn" id="gpx-btn"><svg width="12" height="12" viewBox="0 0 1080 1080" fill="none" stroke="currentColor" stroke-width="80" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px"><path d="M540 120v560"/><path d="M340 480l200 200 200-200"/><path d="M120 720v160h840V720"/></svg> .gpx</button>
-      </div>
-      <div id="map"></div>
-    </div>
-    <div id="regions" class="regions"></div>
-    </div>
+  <div class="profiles">
+    <a class="profile-link" href="/sarah">
+      <img src="https://dgalywyr863hv.cloudfront.net/pictures/athletes/118918676/28452476/15/medium.jpg" alt="Sarah Snow">
+      <span class="name">Sarah Snow</span>
+      <span class="subtitle">San Francisco</span>
+    </a>
   </div>
-
-  <script src="/config.js"></script>
-  <script src="/js/app.js"></script>
 </body>
 </html>
