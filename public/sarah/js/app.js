@@ -1,6 +1,6 @@
 let REGIONS = [];
 const HOME = { center: [-122.52, 37.82], zoom: window.innerWidth <= 600 ? 10 : 11 };
-const LINE_COLOR = '#fc4c02';
+const LINE_COLOR = '#ff1493';
 const NO_MATCH = ['==', ['id'], -1];
 
 let map, geojson, activeRegion = null, selectedId = null;
@@ -105,25 +105,38 @@ async function init() {
 
   // Init map
   mapboxgl.accessToken = MAPBOX_TOKEN;
-  map = new mapboxgl.Map({ container: 'map', style: 'mapbox://styles/mapbox/standard', ...HOME });
-  map.addControl(new MapboxGeocoder({ accessToken: MAPBOX_TOKEN, mapboxgl, marker: false, collapsed: true, placeholder: 'Search location...', flyTo: { speed: 5, curve: 1, zoom: 11 } }), 'top-right');
+  map = new mapboxgl.Map({ container: 'map', style: 'mapbox://styles/mapbox/outdoors-v12', ...HOME });
+  map.addControl(new MapboxGeocoder({ accessToken: MAPBOX_TOKEN, mapboxgl, marker: false, collapsed: true, placeholder: 'Search', flyTo: { speed: 5, curve: 1, zoom: 11 } }), 'top-right');
   map.addControl(new mapboxgl.NavigationControl());
   const geoInput = document.querySelector('.mapboxgl-ctrl-geocoder input');
   if (geoInput) { geoInput.spellcheck = false; geoInput.autocomplete = 'off'; geoInput.autocorrect = 'off'; geoInput.autocapitalize = 'off'; }
 
   map.on('load', () => {
-    // Remove all labels and POI icons
+    // Remove all labels and POI icons, and fade base style layers
+    const FADE = 0.4;
     map.getStyle().layers.forEach(layer => {
-      if (layer.id.match(/label|poi|place/i)) {
+      if (layer.id.match(/label|poi|place|shield|road-number|contour/i)) {
         map.setLayoutProperty(layer.id, 'visibility', 'none');
+        return;
+      }
+      const opacityProp = { fill: 'fill-opacity', line: 'line-opacity', background: 'background-opacity', symbol: 'text-opacity', 'fill-extrusion': 'fill-extrusion-opacity', circle: 'circle-opacity', raster: 'raster-opacity' }[layer.type];
+      if (opacityProp) {
+        const current = map.getPaintProperty(layer.id, opacityProp);
+        map.setPaintProperty(layer.id, opacityProp, (typeof current === 'number' ? current : 1) * FADE);
       }
     });
 
+    const mobileQuery = window.matchMedia('(max-width: 600px)');
+    const rideWidth = () => mobileQuery.matches ? 2 : 3;
     map.addSource('rides', { type: 'geojson', data: geojson, tolerance: 0.5 });
     map.addLayer({ id: 'rides-hit', type: 'line', source: 'rides', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': '#000', 'line-width': 14, 'line-opacity': 0 } });
-    map.addLayer({ id: 'rides-layer', type: 'line', source: 'rides', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': LINE_COLOR, 'line-width': 4, 'line-opacity': 0.9 } });
-    map.addLayer({ id: 'rides-dim', type: 'line', source: 'rides', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': '#e0a88a', 'line-width': 4, 'line-opacity': 1 }, filter: NO_MATCH });
-    map.addLayer({ id: 'rides-highlight', type: 'line', source: 'rides', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': LINE_COLOR, 'line-width': 4, 'line-opacity': 1 }, filter: NO_MATCH });
+    map.addLayer({ id: 'rides-layer', type: 'line', source: 'rides', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': LINE_COLOR, 'line-width': rideWidth(), 'line-opacity': 0.9 } });
+    map.addLayer({ id: 'rides-dim', type: 'line', source: 'rides', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': '#aaaaaa', 'line-width': rideWidth(), 'line-opacity': 1 }, filter: NO_MATCH });
+    map.addLayer({ id: 'rides-highlight', type: 'line', source: 'rides', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': LINE_COLOR, 'line-width': rideWidth(), 'line-opacity': 1 }, filter: NO_MATCH });
+    mobileQuery.addEventListener('change', () => {
+      const w = rideWidth();
+      ['rides-layer', 'rides-dim', 'rides-highlight'].forEach(id => map.setPaintProperty(id, 'line-width', w));
+    });
 
     function dimFilter(hoveredId) {
       const base = ['!=', ['id'], hoveredId];

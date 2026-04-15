@@ -7,14 +7,16 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌞</text></svg>">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       background: #fff;
       color: #333;
-      min-height: 100vh;
+      min-height: 100svh;
       display: flex;
       align-items: center;
       justify-content: center;
+      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
     }
     .profiles {
       display: flex;
@@ -37,8 +39,8 @@
       min-width: 160px;
     }
     .profile-link:hover {
-      border-color: #fc4c02;
-      box-shadow: 0 2px 12px rgba(252, 76, 2, 0.1);
+      border-color: #e040a0;
+      box-shadow: 0 2px 12px rgba(224, 64, 160, 0.1);
     }
     .profile-link img {
       width: 64px;
@@ -61,7 +63,7 @@
 <body>
   <div class="profiles">
     <a class="profile-link" href="/sarah">
-      <img src="https://dgalywyr863hv.cloudfront.net/pictures/athletes/118918676/28452476/15/medium.jpg" alt="Sarah Snow">
+      <img src="https://dgalywyr863hv.cloudfront.net/pictures/athletes/118918676/28452476/15/large.jpg" alt="Sarah Snow">
       <span class="name">Sarah Snow</span>
       <span class="subtitle">San Francisco</span>
     </a>
