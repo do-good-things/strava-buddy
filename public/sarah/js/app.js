@@ -1,5 +1,5 @@
 let REGIONS = [];
-const HOME = { center: [-122.52, 37.82], zoom: window.innerWidth <= 600 ? 10 : 11 };
+const home = () => ({ center: [-122.52, 37.82], zoom: window.innerWidth <= 600 ? 10 : 11 });
 const LINE_COLOR = '#ff1493';
 const NO_MATCH = ['==', ['id'], -1];
 
@@ -51,8 +51,6 @@ async function init() {
         f.geometry = { type: 'MultiLineString', coordinates: segments };
       } else if (segments.length === 1) {
         f.geometry.coordinates = segments[0];
-      } else {
-        f.geometry.coordinates = [];
       }
     }
   });
@@ -83,7 +81,7 @@ async function init() {
     selectedId = null;
     hideRideDetail();
     applyFilter(null);
-    map.flyTo({ ...HOME, duration: 1500 });
+    map.flyTo({ ...home(), duration: 1500 });
   });
   REGIONS.forEach(r => {
     addTab(regionsEl, r.name, counts[r.name] || 0, (btn) => {
@@ -105,13 +103,13 @@ async function init() {
 
   // Init map
   mapboxgl.accessToken = MAPBOX_TOKEN;
-  map = new mapboxgl.Map({ container: 'map', style: 'mapbox://styles/mapbox/outdoors-v12', ...HOME });
+  map = new mapboxgl.Map({ container: 'map', style: 'mapbox://styles/mapbox/outdoors-v12', ...home() });
   map.addControl(new MapboxGeocoder({ accessToken: MAPBOX_TOKEN, mapboxgl, marker: false, collapsed: true, placeholder: 'Search', flyTo: { speed: 5, curve: 1, zoom: 11 } }), 'top-right');
   map.addControl(new mapboxgl.NavigationControl());
   const geoInput = document.querySelector('.mapboxgl-ctrl-geocoder input');
   if (geoInput) { geoInput.spellcheck = false; geoInput.autocomplete = 'off'; geoInput.autocorrect = 'off'; geoInput.autocapitalize = 'off'; }
 
-  map.on('load', () => {
+  map.once('style.load', () => {
     // Remove labels/POIs, hide translucent water overlays, then lightly fade base layers
     const FADE = 0.55;
     map.getStyle().layers.forEach(layer => {
@@ -130,7 +128,9 @@ async function init() {
         map.setPaintProperty(layer.id, opacityProp, (typeof current === 'number' ? current : 1) * FADE);
       }
     });
+  });
 
+  map.on('load', () => {
     const mobileQuery = window.matchMedia('(max-width: 600px)');
     const rideWidth = () => mobileQuery.matches ? 2 : 3;
     map.addSource('rides', { type: 'geojson', data: geojson, tolerance: 0.5 });
