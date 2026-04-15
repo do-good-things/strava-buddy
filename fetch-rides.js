@@ -82,21 +82,41 @@ async function fetchRides() {
   fs.writeFileSync(path.join(DATA_DIR, 'profile.json'), JSON.stringify(profile, null, 2));
   console.log('Profile saved.');
 
-  // Fetch all activities
+  // Load existing rides to only fetch new ones
+  const existingPath = path.join(DATA_DIR, 'rides.json');
+  let existing = { type: 'FeatureCollection', features: [] };
+  try {
+    existing = JSON.parse(fs.readFileSync(existingPath, 'utf8'));
+    console.log(`${existing.features.length} rides already saved`);
+  } catch { /* no existing file */ }
+  const existingDates = new Set(existing.features.map(f => f.properties.date));
+
+  // Only fetch activities newer than the most recent saved ride
+  let afterEpoch = 0;
+  if (existing.features.length > 0) {
+    const newestDate = existing.features
+      .map(f => new Date(f.properties.date).getTime())
+      .reduce((a, b) => Math.max(a, b), 0);
+    afterEpoch = Math.floor(newestDate / 1000);
+    console.log(`Fetching rides after ${new Date(newestDate).toISOString()}...`);
+  }
+
   let page = 1;
   const rides = [];
 
   while (true) {
+    const params = { per_page: 200, page };
+    if (afterEpoch) params.after = afterEpoch;
     const { data } = await axios.get('https://www.strava.com/api/v3/athlete/activities', {
       headers: { Authorization: `Bearer ${token}` },
-      params: { per_page: 200, page },
+      params,
     });
 
     console.log(`Page ${page}: ${data.length} activities`);
 
     for (const a of data) {
       if ((a.type === 'Ride' || a.sport_type === 'Ride') && a.map?.summary_polyline) {
-        rides.push(a);
+        if (!existingDates.has(a.start_date_local)) rides.push(a);
       }
     }
 
@@ -104,9 +124,14 @@ async function fetchRides() {
     page++;
   }
 
-  console.log(`Found ${rides.length} rides, fetching detailed polylines...`);
+  if (rides.length === 0) {
+    console.log('No new rides to fetch.');
+    process.exit(0);
+  }
 
-  const features = [];
+  console.log(`Found ${rides.length} new rides, fetching detailed polylines...`);
+
+  const features = [...existing.features];
   for (let i = 0; i < rides.length; i++) {
     const a = rides[i];
     try {
