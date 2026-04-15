@@ -112,13 +112,18 @@ async function init() {
   if (geoInput) { geoInput.spellcheck = false; geoInput.autocomplete = 'off'; geoInput.autocorrect = 'off'; geoInput.autocapitalize = 'off'; }
 
   map.on('load', () => {
-    // Remove all labels and POI icons, and fade base style layers
-    const FADE = 0.4;
+    // Remove labels/POIs, hide translucent water overlays, then lightly fade base layers
+    const FADE = 0.55;
     map.getStyle().layers.forEach(layer => {
       if (layer.id.match(/label|poi|place|shield|road-number|contour/i)) {
         map.setLayoutProperty(layer.id, 'visibility', 'none');
         return;
       }
+      if (/^(water-depth|water-shadow|waterway-shadow)$/.test(layer.id)) {
+        map.setLayoutProperty(layer.id, 'visibility', 'none');
+        return;
+      }
+      if (layer.id === 'water' || layer.id === 'waterway') return;
       const opacityProp = { fill: 'fill-opacity', line: 'line-opacity', background: 'background-opacity', symbol: 'text-opacity', 'fill-extrusion': 'fill-extrusion-opacity', circle: 'circle-opacity', raster: 'raster-opacity' }[layer.type];
       if (opacityProp) {
         const current = map.getPaintProperty(layer.id, opacityProp);
