@@ -1,8 +1,34 @@
+require('dotenv').config();
 const axios = require('axios');
+const fs = require('fs');
+const path = require('path');
 
-const TOKEN = require('./.tokens.json').access_token;
+const TOKENS_PATH = path.join(__dirname, '.tokens.json');
+
+async function getAccessToken() {
+  let tokenData;
+  try {
+    tokenData = JSON.parse(fs.readFileSync(TOKENS_PATH, 'utf8'));
+  } catch {
+    throw new Error('No .tokens.json found. Run fetch-rides.js first to authenticate.');
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  if (tokenData.expires_at > now) return tokenData.access_token;
+
+  const response = await axios.post('https://www.strava.com/oauth/token', {
+    client_id: process.env.STRAVA_CLIENT_ID,
+    client_secret: process.env.STRAVA_CLIENT_SECRET,
+    refresh_token: tokenData.refresh_token,
+    grant_type: 'refresh_token',
+  });
+  tokenData = { ...tokenData, ...response.data };
+  fs.writeFileSync(TOKENS_PATH, JSON.stringify(tokenData, null, 2));
+  return tokenData.access_token;
+}
 
 async function main() {
+  const TOKEN = await getAccessToken();
   let page = 1;
   let allRides = [];
 
