@@ -26,6 +26,23 @@ function splitGaps(coords, maxGapKm = 5) {
   return segments;
 }
 
+// Reports when the rides were last pulled from Strava, which refresh.js stamps
+// into rides.json. Deliberately not the file's mtime or a build date: a deploy
+// that shipped no new rides would otherwise look like a fresh fetch.
+function showLastUpdated(iso) {
+  const el = document.getElementById('last-updated');
+  if (!el || !iso) return;
+  const when = new Date(iso);
+  if (isNaN(when.getTime())) return;
+  // Pacific time, so the label tracks PST/PDT rather than the viewer's zone.
+  const stamp = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Los_Angeles',
+    month: 'short', day: 'numeric', year: 'numeric',
+    hour: 'numeric', minute: '2-digit', timeZoneName: 'short',
+  }).format(when);
+  el.textContent = `rides last pulled ${stamp}`;
+}
+
 async function init() {
   const [ridesRes, ebikeRes, regionsRes] = await Promise.all([
     fetch('/sarah/data/rides.json'),
@@ -41,6 +58,7 @@ async function init() {
   }
   if (regionsRes.ok) REGIONS = await regionsRes.json();
 
+  showLastUpdated(geojson.generated_at);
   refreshStats();
 
   // Split rides at large GPS gaps to avoid long straight lines over water/pauses

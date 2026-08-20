@@ -62,3 +62,4 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
   .mapboxgl-ctrl-geocoder.mapboxgl-ctrl-geocoder--collapsed { min-width: 32px; width: 32px; height: 32px; }
   .mapboxgl-ctrl-geocoder.mapboxgl-ctrl-geocoder--collapsed .mapboxgl-ctrl-geocoder--icon-search { top: 50%; left: 50%; transform: translate(-50%, -50%); margin: 0; }
 }
+.last-updated { display: block; margin-top: 0.35rem; color: #ccc; }
