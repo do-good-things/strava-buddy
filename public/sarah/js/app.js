@@ -29,7 +29,7 @@ function splitGaps(coords, maxGapKm = 5) {
 // Footer marquee. The visible strip is repeated until it covers the viewport,
 // then that whole group is duplicated once; the CSS shifts the track by 50%, so
 // the loop restarts exactly where it began.
-const MARQUEE_SPEED_PX_PER_SEC = 80;
+const MARQUEE_SPEED_PX_PER_SEC = 40;
 
 function startFooterMarquee() {
   const track = document.getElementById('marquee-track');
