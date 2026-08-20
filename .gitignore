@@ -3,3 +3,4 @@ node_modules
 .tokens.json
 public/config.js
 public/sarah/data/photos
+.geocache.json
