@@ -230,14 +230,6 @@ function showRideDetail(p) {
   const mi = (p.distance / 1609.34).toFixed(1);
   document.getElementById('ride-name').textContent = p.name;
   document.getElementById('ride-stats').innerHTML = `${p.ebike ? '⚡ ' : ''}${mi} mi<br>${fmtTime(p.moving_time)} riding time<br>${fmtTime(p.elapsed_time)} total`;
-  const photosEl = document.getElementById('ride-photos');
-  if (p.photos && p.photos.length) {
-    photosEl.innerHTML = p.photos.map(src => `<img src="/sarah/data/${src}" alt="">`).join('');
-    photosEl.style.display = '';
-  } else {
-    photosEl.innerHTML = '';
-    photosEl.style.display = 'none';
-  }
   document.getElementById('gpx-btn').onclick = downloadGpx;
   document.getElementById('info-panel').style.display = 'none';
   document.getElementById('ride-detail').classList.add('visible');
