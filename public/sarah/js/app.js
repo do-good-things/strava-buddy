@@ -26,6 +26,59 @@ function splitGaps(coords, maxGapKm = 5) {
   return segments;
 }
 
+// Footer marquee. The visible strip is repeated until it covers the viewport,
+// then that whole group is duplicated once; the CSS shifts the track by 50%, so
+// the loop restarts exactly where it began.
+const MARQUEE_SPEED_PX_PER_SEC = 80;
+
+function startFooterMarquee() {
+  const track = document.getElementById('marquee-track');
+  const original = track && track.querySelector('.marquee-item');
+  if (!original) return;
+
+  const containerWidth = track.parentElement.getBoundingClientRect().width;
+  const itemWidth = original.getBoundingClientRect().width;
+  if (!itemWidth || !containerWidth) return;
+
+  // Repeats are hidden from assistive tech, and ids must not be cloned.
+  const copyOf = node => {
+    const copy = node.cloneNode(true);
+    copy.setAttribute('aria-hidden', 'true');
+    copy.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'));
+    return copy;
+  };
+
+  const group = document.createElement('div');
+  group.className = 'marquee-group';
+  group.appendChild(original); // the real element keeps its id and stays first
+  // Two viewports' worth per group: the strip stays full across the whole
+  // cycle rather than thinning out as the seam approaches.
+  const repeats = Math.max(2, Math.ceil((containerWidth * 2) / itemWidth));
+  for (let i = 1; i < repeats; i++) group.appendChild(copyOf(original));
+
+  track.textContent = '';
+  track.append(group, copyOf(group));
+
+  const groupWidth = group.getBoundingClientRect().width;
+  track.style.animationDuration = `${groupWidth / MARQUEE_SPEED_PX_PER_SEC}s`;
+}
+
+// Rebuild on resize so the strip still covers a widened window.
+let marqueeResizeTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(marqueeResizeTimer);
+  marqueeResizeTimer = setTimeout(() => {
+    const track = document.getElementById('marquee-track');
+    const first = track && track.querySelector('.marquee-item');
+    if (!first) return;
+    track.textContent = '';
+    first.removeAttribute('aria-hidden');
+    track.appendChild(first);
+    track.style.animationDuration = '';
+    startFooterMarquee();
+  }, 200);
+});
+
 // Reports when the rides were last pulled from Strava, which refresh.js stamps
 // into rides.json. Deliberately not the file's mtime or a build date: a deploy
 // that shipped no new rides would otherwise look like a fresh fetch.
@@ -40,7 +93,8 @@ function showLastUpdated(iso) {
     month: 'short', day: 'numeric', year: 'numeric',
     hour: 'numeric', minute: '2-digit', timeZoneName: 'short',
   }).format(when);
-  el.textContent = `rides last pulled ${stamp}`;
+  // The separator is drawn by CSS, which hides it when this element is empty.
+  el.textContent = `last pulled ${stamp}`.toLowerCase();
 }
 
 async function init() {
@@ -59,6 +113,7 @@ async function init() {
   if (regionsRes.ok) REGIONS = await regionsRes.json();
 
   showLastUpdated(geojson.generated_at);
+  startFooterMarquee(); // after the timestamp lands, so widths measure correctly
   refreshStats();
 
   // Split rides at large GPS gaps to avoid long straight lines over water/pauses
