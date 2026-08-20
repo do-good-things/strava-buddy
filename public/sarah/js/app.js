@@ -88,13 +88,17 @@ function showLastUpdated(iso) {
   const when = new Date(iso);
   if (isNaN(when.getTime())) return;
   // Pacific time, so the label tracks PST/PDT rather than the viewer's zone.
-  const stamp = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/Los_Angeles',
-    month: 'short', day: 'numeric', year: 'numeric',
-    hour: 'numeric', minute: '2-digit', timeZoneName: 'short',
+  // Date and time are formatted separately because a single formatter joins
+  // them with a comma, and the label reads with an @ between them.
+  const zone = { timeZone: 'America/Los_Angeles' };
+  const date = new Intl.DateTimeFormat('en-US', {
+    ...zone, month: 'short', day: 'numeric', year: 'numeric',
+  }).format(when);
+  const time = new Intl.DateTimeFormat('en-US', {
+    ...zone, hour: 'numeric', minute: '2-digit', timeZoneName: 'short',
   }).format(when);
   // The separator is drawn by CSS, which hides it when this element is empty.
-  el.textContent = `last pulled ${stamp}`.toLowerCase();
+  el.textContent = `refreshed on ${date} @ ${time}`.toLowerCase();
 }
 
 async function init() {
