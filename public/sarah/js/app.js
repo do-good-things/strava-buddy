@@ -321,8 +321,6 @@ function computeStats(features) {
   let totalDist = 0, totalMoving = 0, totalElapsed = 0;
   const countries = new Set();
   const continents = new Set();
-  const states = new Set();
-  const cities = new Set();
   features.forEach(f => {
     const p = f.properties;
     totalDist += p.distance || 0;
@@ -336,22 +334,7 @@ function computeStats(features) {
     else if (lat > 20 && lat < 50 && lng > -130 && lng < -60) { countries.add('USA'); continents.add('North America'); }
     else if (lat > 34 && lat < 36 && lng > 136 && lng < 140) { countries.add('Japan'); continents.add('Asia'); }
     else if (lat > 46 && lat < 48 && lng > 6 && lng < 9) { countries.add('Switzerland'); continents.add('Europe'); }
-    // US state detection
-    if (lat > 32 && lat < 42 && lng > -125 && lng < -114) states.add('California');
-    else if (lat > 46 && lat < 49 && lng > -125 && lng < -117) states.add('Washington');
-    else if (lat > 38.5 && lat < 40 && lng > -121 && lng < -119) states.add('Nevada');
-    else if (lat > 20 && lat < 22 && lng > -160 && lng < -154) { states.add('Hawaii'); countries.add('USA'); continents.add('North America'); }
-    else if (lat > 37 && lat < 40 && lng > -80 && lng < -75) states.add('Virginia');
-    else if (lat > 38.5 && lat < 40 && lng > -77.5 && lng < -76) states.add('Maryland');
-    else if (lat > 33 && lat < 37 && lng > -77 && lng < -75) states.add('North Carolina');
-    // City detection: use regions as cities
-    for (const r of REGIONS) {
-      const [[minLng, minLat], [maxLng, maxLat]] = r.bounds;
-      if (lat >= minLat && lat <= maxLat && lng >= minLng && lng <= maxLng) {
-        cities.add(r.name);
-        break;
-      }
-    }
+    else if (lat > 18 && lat < 23 && lng > -161 && lng < -154) { countries.add('USA'); continents.add('North America'); }
   });
   return {
     totalDist,
@@ -359,8 +342,6 @@ function computeStats(features) {
     totalElapsed,
     countries,
     continents,
-    states,
-    cities,
     rideCount: features.length
   };
 }
@@ -373,8 +354,7 @@ function refreshStats() {
     + `<span class="stats-value">${fmtTime(stats.totalMoving)}</span> riding time<br>`
     + `<span class="stats-value">${fmtTime(stats.totalElapsed)}</span> elapsed time<br>`
     + `<span class="stats-value">${stats.continents.size}</span> continents<br>`
-    + `<span class="stats-value">${stats.countries.size}</span> countries<br>`
-    + `<span class="stats-value">${stats.cities.size}</span> cities`;
+    + `<span class="stats-value">${stats.countries.size}</span> countries`;
 }
 
 init();
