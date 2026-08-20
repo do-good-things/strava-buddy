@@ -1,6 +1,6 @@
 let REGIONS = [];
-const HOME = { center: [-122.52, 37.82], zoom: window.innerWidth <= 600 ? 10 : 11 };
-const LINE_COLOR = '#fc4c02';
+const home = () => ({ center: [-122.52, 37.82], zoom: window.innerWidth <= 600 ? 10 : 11 });
+const LINE_COLOR = '#ff1493';
 const NO_MATCH = ['==', ['id'], -1];
 
 let map, geojson, activeRegion = null, selectedId = null;
@@ -51,8 +51,6 @@ async function init() {
         f.geometry = { type: 'MultiLineString', coordinates: segments };
       } else if (segments.length === 1) {
         f.geometry.coordinates = segments[0];
-      } else {
-        f.geometry.coordinates = [];
       }
     }
   });
@@ -83,7 +81,7 @@ async function init() {
     selectedId = null;
     hideRideDetail();
     applyFilter(null);
-    map.flyTo({ ...HOME, duration: 1500 });
+    map.flyTo({ ...home(), duration: 1500 });
   });
   REGIONS.forEach(r => {
     addTab(regionsEl, r.name, counts[r.name] || 0, (btn) => {
@@ -105,25 +103,45 @@ async function init() {
 
   // Init map
   mapboxgl.accessToken = MAPBOX_TOKEN;
-  map = new mapboxgl.Map({ container: 'map', style: 'mapbox://styles/mapbox/standard', ...HOME });
-  map.addControl(new MapboxGeocoder({ accessToken: MAPBOX_TOKEN, mapboxgl, marker: false, collapsed: true, placeholder: 'Search location...', flyTo: { speed: 5, curve: 1, zoom: 11 } }), 'top-right');
+  map = new mapboxgl.Map({ container: 'map', style: 'mapbox://styles/mapbox/outdoors-v12', ...home() });
+  map.addControl(new MapboxGeocoder({ accessToken: MAPBOX_TOKEN, mapboxgl, marker: false, collapsed: true, placeholder: 'Search', flyTo: { speed: 5, curve: 1, zoom: 11 } }), 'top-right');
   map.addControl(new mapboxgl.NavigationControl());
   const geoInput = document.querySelector('.mapboxgl-ctrl-geocoder input');
   if (geoInput) { geoInput.spellcheck = false; geoInput.autocomplete = 'off'; geoInput.autocorrect = 'off'; geoInput.autocapitalize = 'off'; }
 
-  map.on('load', () => {
-    // Remove all labels and POI icons
+  map.once('style.load', () => {
+    // Remove labels/POIs, hide translucent water overlays, then lightly fade base layers
+    const FADE = 0.55;
     map.getStyle().layers.forEach(layer => {
-      if (layer.id.match(/label|poi|place/i)) {
+      if (layer.id.match(/label|poi|place|shield|road-number|contour/i)) {
         map.setLayoutProperty(layer.id, 'visibility', 'none');
+        return;
+      }
+      if (/^(water-depth|water-shadow|waterway-shadow)$/.test(layer.id)) {
+        map.setLayoutProperty(layer.id, 'visibility', 'none');
+        return;
+      }
+      if (layer.id === 'water' || layer.id === 'waterway') return;
+      const opacityProp = { fill: 'fill-opacity', line: 'line-opacity', background: 'background-opacity', symbol: 'text-opacity', 'fill-extrusion': 'fill-extrusion-opacity', circle: 'circle-opacity', raster: 'raster-opacity' }[layer.type];
+      if (opacityProp) {
+        const current = map.getPaintProperty(layer.id, opacityProp);
+        map.setPaintProperty(layer.id, opacityProp, (typeof current === 'number' ? current : 1) * FADE);
       }
     });
+  });
 
+  map.on('load', () => {
+    const mobileQuery = window.matchMedia('(max-width: 600px)');
+    const rideWidth = () => mobileQuery.matches ? 2 : 3;
     map.addSource('rides', { type: 'geojson', data: geojson, tolerance: 0.5 });
     map.addLayer({ id: 'rides-hit', type: 'line', source: 'rides', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': '#000', 'line-width': 14, 'line-opacity': 0 } });
-    map.addLayer({ id: 'rides-layer', type: 'line', source: 'rides', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': LINE_COLOR, 'line-width': 4, 'line-opacity': 0.9 } });
-    map.addLayer({ id: 'rides-dim', type: 'line', source: 'rides', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': '#e0a88a', 'line-width': 4, 'line-opacity': 1 }, filter: NO_MATCH });
-    map.addLayer({ id: 'rides-highlight', type: 'line', source: 'rides', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': LINE_COLOR, 'line-width': 4, 'line-opacity': 1 }, filter: NO_MATCH });
+    map.addLayer({ id: 'rides-layer', type: 'line', source: 'rides', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': LINE_COLOR, 'line-width': rideWidth(), 'line-opacity': 0.9 } });
+    map.addLayer({ id: 'rides-dim', type: 'line', source: 'rides', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': '#aaaaaa', 'line-width': rideWidth(), 'line-opacity': 1 }, filter: NO_MATCH });
+    map.addLayer({ id: 'rides-highlight', type: 'line', source: 'rides', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': LINE_COLOR, 'line-width': rideWidth(), 'line-opacity': 1 }, filter: NO_MATCH });
+    mobileQuery.addEventListener('change', () => {
+      const w = rideWidth();
+      ['rides-layer', 'rides-dim', 'rides-highlight'].forEach(id => map.setPaintProperty(id, 'line-width', w));
+    });
 
     function dimFilter(hoveredId) {
       const base = ['!=', ['id'], hoveredId];
@@ -194,6 +212,14 @@ function showRideDetail(p) {
   const mi = (p.distance / 1609.34).toFixed(1);
   document.getElementById('ride-name').textContent = p.name;
   document.getElementById('ride-stats').innerHTML = `${p.ebike ? '⚡ ' : ''}${mi} mi<br>${fmtTime(p.moving_time)} riding time<br>${fmtTime(p.elapsed_time)} total`;
+  const photosEl = document.getElementById('ride-photos');
+  if (p.photos && p.photos.length) {
+    photosEl.innerHTML = p.photos.map(src => `<img src="/sarah/data/${src}" alt="">`).join('');
+    photosEl.style.display = '';
+  } else {
+    photosEl.innerHTML = '';
+    photosEl.style.display = 'none';
+  }
   document.getElementById('gpx-btn').onclick = downloadGpx;
   document.getElementById('info-panel').style.display = 'none';
   document.getElementById('ride-detail').classList.add('visible');
