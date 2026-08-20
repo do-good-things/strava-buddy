@@ -15,7 +15,6 @@ const polyline = require('@mapbox/polyline');
 
 const PORT = 3000;
 const DATA_DIR = path.join(__dirname, 'public', 'sarah', 'data');
-const PHOTOS_DIR = path.join(DATA_DIR, 'photos');
 const TOKENS_PATH = path.join(__dirname, '.tokens.json');
 const GEOCACHE_PATH = path.join(__dirname, '.geocache.json');
 
@@ -123,31 +122,6 @@ async function fetchAllActivities(token) {
   return { rides, ebikeRides };
 }
 
-async function downloadPhoto(url, destPath) {
-  const res = await axios.get(url, { responseType: 'arraybuffer' });
-  fs.writeFileSync(destPath, res.data);
-}
-
-async function fetchActivityPhotos(activityId, token) {
-  const { data } = await axios.get(`https://www.strava.com/api/v3/activities/${activityId}/photos`, {
-    headers: { Authorization: `Bearer ${token}` },
-    params: { size: 1024, photo_sources: true },
-  });
-  const activityDir = path.join(PHOTOS_DIR, String(activityId));
-  fs.mkdirSync(activityDir, { recursive: true });
-  const saved = [];
-  for (let i = 0; i < data.length; i++) {
-    const photo = data[i];
-    const url = photo.urls?.['1024'] || photo.urls?.[Object.keys(photo.urls || {})[0]];
-    if (!url) continue;
-    const filename = `${i}.jpg`;
-    const destPath = path.join(activityDir, filename);
-    if (!fs.existsSync(destPath)) await downloadPhoto(url, destPath);
-    saved.push(`photos/${activityId}/${filename}`);
-  }
-  return saved;
-}
-
 async function fetchDetailedFeatures(activities, token, label) {
   console.log(`Fetching ${activities.length} ${label} detailed polylines...`);
   const features = [];
@@ -160,14 +134,6 @@ async function fetchDetailedFeatures(activities, token, label) {
       });
       const poly = detail.map?.polyline || detail.map?.summary_polyline;
       if (poly) {
-        let photos = [];
-        if ((a.total_photo_count || 0) > 0) {
-          try {
-            photos = await fetchActivityPhotos(a.id, token);
-          } catch (err) {
-            console.warn(`  Photos failed for ${a.id}: ${err.response?.status || err.message}`);
-          }
-        }
         features.push({
           type: 'Feature',
           properties: {
@@ -177,7 +143,6 @@ async function fetchDetailedFeatures(activities, token, label) {
             moving_time: a.moving_time,
             elapsed_time: a.elapsed_time,
             elevation_gain: a.total_elevation_gain,
-            photos,
           },
           geometry: polyline.toGeoJSON(poly),
         });
@@ -363,8 +328,6 @@ async function refresh() {
     return;
   }
 
-  fs.mkdirSync(PHOTOS_DIR, { recursive: true });
-
   // 1. Fetch profile
   console.log('\n=== Fetching profile ===');
   const { data: profile } = await axios.get('https://www.strava.com/api/v3/athlete', {
@@ -384,20 +347,30 @@ async function refresh() {
   const ebikeFeatures = await fetchDetailedFeatures(ebikeRides, token, 'e-bike');
 
   // 4. Write ride data
-  const ridesGeoJson = { type: 'FeatureCollection', features: rideFeatures };
+  // Reported relative to DATA_DIR so these paths cannot drift out of date again.
+  const saved = file => path.relative(__dirname, path.join(DATA_DIR, file));
+
+  // When the rides were pulled from Strava, which is what the site's footer
+  // reports. Deliberately not the file's mtime: that is reset by a git clone,
+  // so a deploy would make stale data look freshly fetched.
+  const ridesGeoJson = {
+    type: 'FeatureCollection',
+    generated_at: new Date().toISOString(),
+    features: rideFeatures,
+  };
   fs.writeFileSync(path.join(DATA_DIR, 'rides.json'), JSON.stringify(ridesGeoJson));
-  console.log(`\n${rideFeatures.length} rides saved to public/data/rides.json`);
+  console.log(`\n${rideFeatures.length} rides saved to ${saved('rides.json')}`);
 
   const ebikeGeoJson = { type: 'FeatureCollection', features: ebikeFeatures };
   fs.writeFileSync(path.join(DATA_DIR, 'ebike-rides.json'), JSON.stringify(ebikeGeoJson));
-  console.log(`${ebikeFeatures.length} e-bike rides saved to public/data/ebike-rides.json`);
+  console.log(`${ebikeFeatures.length} e-bike rides saved to ${saved('ebike-rides.json')}`);
 
   // 5. Generate regions from all rides (regular + e-bike)
   console.log('\n=== Generating regions ===');
   const allFeatures = [...rideFeatures, ...ebikeFeatures];
   const regions = await generateRegions(allFeatures);
   fs.writeFileSync(path.join(DATA_DIR, 'regions.json'), JSON.stringify(regions, null, 2));
-  console.log(`\n${regions.length} regions saved to public/data/regions.json`);
+  console.log(`\n${regions.length} regions saved to ${saved('regions.json')}`);
 
   console.log('\nDone!');
   process.exit(0);
