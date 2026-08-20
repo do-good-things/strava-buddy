@@ -14,7 +14,8 @@ const path = require('path');
 const polyline = require('@mapbox/polyline');
 
 const PORT = 3000;
-const DATA_DIR = path.join(__dirname, 'public', 'data');
+const DATA_DIR = path.join(__dirname, 'public', 'sarah', 'data');
+const PHOTOS_DIR = path.join(DATA_DIR, 'photos');
 const TOKENS_PATH = path.join(__dirname, '.tokens.json');
 
 const CLUSTER_RADIUS_KM = 80;
@@ -84,6 +85,31 @@ async function fetchAllActivities(token) {
   return { rides, ebikeRides };
 }
 
+async function downloadPhoto(url, destPath) {
+  const res = await axios.get(url, { responseType: 'arraybuffer' });
+  fs.writeFileSync(destPath, res.data);
+}
+
+async function fetchActivityPhotos(activityId, token) {
+  const { data } = await axios.get(`https://www.strava.com/api/v3/activities/${activityId}/photos`, {
+    headers: { Authorization: `Bearer ${token}` },
+    params: { size: 1024, photo_sources: true },
+  });
+  const activityDir = path.join(PHOTOS_DIR, String(activityId));
+  fs.mkdirSync(activityDir, { recursive: true });
+  const saved = [];
+  for (let i = 0; i < data.length; i++) {
+    const photo = data[i];
+    const url = photo.urls?.['1024'] || photo.urls?.[Object.keys(photo.urls || {})[0]];
+    if (!url) continue;
+    const filename = `${i}.jpg`;
+    const destPath = path.join(activityDir, filename);
+    if (!fs.existsSync(destPath)) await downloadPhoto(url, destPath);
+    saved.push(`photos/${activityId}/${filename}`);
+  }
+  return saved;
+}
+
 async function fetchDetailedFeatures(activities, token, label) {
   console.log(`Fetching ${activities.length} ${label} detailed polylines...`);
   const features = [];
@@ -96,6 +122,14 @@ async function fetchDetailedFeatures(activities, token, label) {
       });
       const poly = detail.map?.polyline || detail.map?.summary_polyline;
       if (poly) {
+        let photos = [];
+        if ((a.total_photo_count || 0) > 0) {
+          try {
+            photos = await fetchActivityPhotos(a.id, token);
+          } catch (err) {
+            console.warn(`  Photos failed for ${a.id}: ${err.response?.status || err.message}`);
+          }
+        }
         features.push({
           type: 'Feature',
           properties: {
@@ -105,6 +139,7 @@ async function fetchDetailedFeatures(activities, token, label) {
             moving_time: a.moving_time,
             elapsed_time: a.elapsed_time,
             elevation_gain: a.total_elevation_gain,
+            photos,
           },
           geometry: polyline.toGeoJSON(poly),
         });
@@ -242,6 +277,8 @@ async function refresh() {
     console.log('Not authenticated. Visit http://localhost:3000/auth/strava');
     return;
   }
+
+  fs.mkdirSync(PHOTOS_DIR, { recursive: true });
 
   // 1. Fetch profile
   console.log('\n=== Fetching profile ===');
