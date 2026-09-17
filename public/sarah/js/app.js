@@ -232,22 +232,40 @@ async function init() {
     map.on('mouseleave', 'rides-hit', () => { map.getCanvas().style.cursor = ''; if (selectedId === null) { map.setFilter('rides-dim', NO_MATCH); map.setFilter('rides-highlight', NO_MATCH); } });
     map.on('mousemove', 'rides-hit', e => { if (selectedId === null && e.features.length) { const id = e.features[0].id; map.setFilter('rides-dim', dimFilter(id)); map.setFilter('rides-highlight', highlightFilter(id)); } });
 
-    map.on('click', 'rides-hit', e => {
-      if (!e.features.length) return;
-      selectedId = e.features[0].id;
+    function selectRide(id, { fit = true } = {}) {
+      selectedId = id;
       setActiveTab(document.querySelector('.region-btn'));
       activeRegion = null;
       map.setFilter('rides-hit', NO_MATCH);
       map.setFilter('rides-dim', NO_MATCH);
       map.setFilter('rides-highlight', NO_MATCH);
-      map.setFilter('rides-layer', ['==', ['id'], selectedId]);
+      if (fit) map.setFilter('rides-layer', ['==', ['id'], selectedId]);
       map.getCanvas().style.cursor = '';
       showRideDetail(geojson.features[selectedId].properties);
+      if (!fit) return;
       const bounds = new mapboxgl.LngLatBounds();
       const geom = geojson.features[selectedId].geometry;
       const clickCoords = geom.type === 'MultiLineString' ? geom.coordinates.flat() : geom.coordinates;
       clickCoords.forEach(c => bounds.extend(c));
       map.fitBounds(bounds, { padding: 60, duration: 1000 });
+    }
+
+    map.on('click', 'rides-hit', e => {
+      if (!e.features.length) return;
+      const ids = [...new Set(e.features.map(feature => feature.id))];
+      if (ids.length > 1) {
+        selectRide(ids[0]);
+        // Keep every route that occupies the clicked map point visible while
+        // the chooser is open. The selected route is still shown in the detail card.
+        const matches = ['match', ['id'], ids, true, false];
+        map.setFilter('rides-layer', matches);
+        map.setFilter('rides-hit', NO_MATCH);
+        map.setFilter('rides-dim', NO_MATCH);
+        map.setFilter('rides-highlight', matches);
+        showOverlapChooser(ids, id => selectRide(id, { fit: false }));
+        return;
+      }
+      selectRide(ids[0]);
     });
 
     map.on('click', e => {
@@ -294,7 +312,26 @@ function showRideDetail(p) {
   document.getElementById('ride-detail').classList.add('visible');
 }
 
+function showOverlapChooser(ids, onSelect) {
+  const chooser = document.getElementById('overlap-chooser');
+  chooser.replaceChildren();
+  const label = document.createElement('div');
+  label.className = 'overlap-label';
+  label.textContent = `${ids.length} overlapping rides`;
+  chooser.appendChild(label);
+  ids.forEach((id, index) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'overlap-option';
+    button.textContent = geojson.features[id].properties.name;
+    button.addEventListener('click', () => onSelect(id));
+    if (index === 0) button.classList.add('active');
+    chooser.appendChild(button);
+  });
+}
+
 function hideRideDetail() {
+  document.getElementById('overlap-chooser').replaceChildren();
   document.getElementById('ride-detail').classList.remove('visible');
   document.getElementById('info-panel').style.display = '';
 }
