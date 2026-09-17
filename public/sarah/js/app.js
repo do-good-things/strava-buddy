@@ -214,10 +214,11 @@ async function init() {
     map.addLayer({ id: 'rides-hit', type: 'line', source: 'rides', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': '#000', 'line-width': 14, 'line-opacity': 0 } });
     map.addLayer({ id: 'rides-layer', type: 'line', source: 'rides', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': LINE_COLOR, 'line-width': rideWidth(), 'line-opacity': 0.9 } });
     map.addLayer({ id: 'rides-dim', type: 'line', source: 'rides', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': '#aaaaaa', 'line-width': rideWidth(), 'line-opacity': 1 }, filter: NO_MATCH });
-    map.addLayer({ id: 'rides-highlight', type: 'line', source: 'rides', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': LINE_COLOR, 'line-width': rideWidth(), 'line-opacity': 1 }, filter: NO_MATCH });
+    map.addLayer({ id: 'rides-highlight', type: 'line', source: 'rides', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': LINE_COLOR, 'line-width': rideWidth() + 2, 'line-opacity': 1 }, filter: NO_MATCH });
     mobileQuery.addEventListener('change', () => {
       const w = rideWidth();
-      ['rides-layer', 'rides-dim', 'rides-highlight'].forEach(id => map.setPaintProperty(id, 'line-width', w));
+      ['rides-layer', 'rides-dim'].forEach(id => map.setPaintProperty(id, 'line-width', w));
+      map.setPaintProperty('rides-highlight', 'line-width', w + 2);
     });
 
     function dimFilter(hoveredId) {
@@ -238,10 +239,11 @@ async function init() {
       activeRegion = null;
       map.setFilter('rides-hit', NO_MATCH);
       map.setFilter('rides-dim', NO_MATCH);
-      map.setFilter('rides-highlight', NO_MATCH);
+      map.setFilter('rides-highlight', ['==', ['id'], selectedId]);
       if (fit) map.setFilter('rides-layer', ['==', ['id'], selectedId]);
       map.getCanvas().style.cursor = '';
       showRideDetail(geojson.features[selectedId].properties);
+      setActiveOverlapOption(selectedId);
       if (!fit) return;
       const bounds = new mapboxgl.LngLatBounds();
       const geom = geojson.features[selectedId].geometry;
@@ -261,7 +263,7 @@ async function init() {
         map.setFilter('rides-layer', matches);
         map.setFilter('rides-hit', NO_MATCH);
         map.setFilter('rides-dim', NO_MATCH);
-        map.setFilter('rides-highlight', matches);
+        map.setFilter('rides-highlight', ['==', ['id'], ids[0]]);
         showOverlapChooser(ids, id => selectRide(id, { fit: false }));
         return;
       }
@@ -323,10 +325,17 @@ function showOverlapChooser(ids, onSelect) {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'overlap-option';
+    button.dataset.rideId = id;
     button.textContent = geojson.features[id].properties.name;
     button.addEventListener('click', () => onSelect(id));
     if (index === 0) button.classList.add('active');
     chooser.appendChild(button);
+  });
+}
+
+function setActiveOverlapOption(id) {
+  document.querySelectorAll('.overlap-option').forEach(button => {
+    button.classList.toggle('active', Number(button.dataset.rideId) === id);
   });
 }
 
