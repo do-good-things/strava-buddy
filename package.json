@@ -5,6 +5,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
+    "authorize": "node authorize.js",
     "test": "node --test",
     "refresh": "node refresh.js"
   },
