@@ -102,21 +102,24 @@ function showLastUpdated(iso) {
 }
 
 async function init() {
-  const [ridesRes, ebikeRes, regionsRes] = await Promise.all([
-    fetch('/sarah/data/rides.json'),
-    fetch('/sarah/data/ebike-rides.json'),
-    fetch('/sarah/data/regions.json')
-  ]);
-  if (!ridesRes.ok) { console.error('Failed to load ride data'); return; }
-  geojson = await ridesRes.json();
-  if (ebikeRes.ok) {
-    const ebike = await ebikeRes.json();
-    ebike.features.forEach(f => { f.properties.ebike = true; });
-    geojson.features.push(...ebike.features);
-  }
-  if (regionsRes.ok) REGIONS = await regionsRes.json();
+  const response = await fetch('/sarah/map.json', { cache: 'no-store' });
+  if (!response.ok) throw new Error('Map data unavailable');
+  const snapshot = await response.json();
+  geojson = snapshot.rides;
+  REGIONS = snapshot.regions;
+  const expiresIn = Date.parse(snapshot.expires_at) - Date.now();
+  if (!(expiresIn > 0)) throw new Error('Map data expired');
+  setTimeout(() => {
+    if (map) map.remove();
+    geojson = null;
+    document.getElementById('ride-photos').replaceChildren();
+    hideRideDetail();
+    document.getElementById('regions').replaceChildren();
+    document.getElementById('stats-card').textContent = '';
+    document.getElementById('map').textContent = 'Please reload to see the latest map.';
+  }, Math.min(expiresIn, 2147483647));
 
-  showLastUpdated(geojson.generated_at);
+  showLastUpdated(snapshot.generated_at);
   startFooterMarquee(); // after the timestamp lands, so widths measure correctly
   refreshStats();
 
@@ -132,9 +135,8 @@ async function init() {
     }
   });
 
-  // Tag rides with region + age
-  const dates = geojson.features.map(f => new Date(f.properties.date).getTime());
-  const minDate = Math.min(...dates), dateRange = Math.max(...dates) - minDate || 1;
+  // IDs are local array indexes, never Strava identifiers. Region labels are
+  // derived from geometry for filtering; private activity metadata is absent.
   geojson.features.forEach((f, i) => {
     f.id = i;
     const allCoords = f.geometry.type === 'MultiLineString' ? f.geometry.coordinates.flat() : f.geometry.coordinates;
@@ -143,7 +145,6 @@ async function init() {
       const [[minLng, minLat], [maxLng, maxLat]] = r.bounds;
       return lat >= minLat && lat <= maxLat && lng >= minLng && lng <= maxLng;
     }) || { name: 'other' }).name;
-    f.properties.age = (new Date(f.properties.date).getTime() - minDate) / dateRange;
   });
 
   // Count rides per region
@@ -286,23 +287,43 @@ function downloadGpx() {
 }
 
 function showRideDetail(p) {
-  const mi = (p.distance / 1609.34).toFixed(1);
+  const mi = p.mileage.toFixed(1);
   document.getElementById('ride-name').textContent = p.name;
-  document.getElementById('ride-stats').innerHTML = `${p.ebike ? '⚡ ' : ''}${mi} mi<br>${fmtTime(p.moving_time)} riding time<br>${fmtTime(p.elapsed_time)} total`;
+  document.getElementById('ride-stats').innerHTML = `${mi} mi<br>${fmtTime(p.riding_time)} riding time<br>${fmtTime(p.elapsed_time)} elapsed time`;
   document.getElementById('gpx-btn').onclick = downloadGpx;
+  const photos = document.getElementById('ride-photos');
+  photos.replaceChildren();
+  for (const [index, url] of (p.photos || []).entries()) {
+    const link = document.createElement('a');
+    link.href = url;
+    link.target = '_blank';
+    link.rel = 'noopener';
+    const img = document.createElement('img');
+    img.src = url;
+    img.alt = `${p.name}, photo ${index + 1}`;
+    img.loading = 'lazy';
+    img.addEventListener('error', () => link.remove());
+    link.append(img);
+    photos.append(link);
+  }
   document.getElementById('info-panel').style.display = 'none';
   document.getElementById('ride-detail').classList.add('visible');
 }
 
 function hideRideDetail() {
   document.getElementById('ride-detail').classList.remove('visible');
+  document.getElementById('ride-photos').replaceChildren();
   document.getElementById('info-panel').style.display = '';
 }
 
 function addTab(parent, name, count, onClick) {
   const btn = document.createElement('button');
   btn.className = 'region-btn' + (name === 'all' ? ' active' : '');
-  btn.innerHTML = `${name}<span class="count">${count}</span>`;
+  btn.append(document.createTextNode(name));
+  const badge = document.createElement('span');
+  badge.className = 'count';
+  badge.textContent = count;
+  btn.append(badge);
   btn.addEventListener('click', () => onClick(btn));
   parent.appendChild(btn);
 }
@@ -321,44 +342,19 @@ function applyFilter(filter) {
 }
 applyFilter._current = null;
 
-function computeStats(features) {
-  let totalDist = 0, totalMoving = 0, totalElapsed = 0;
-  const countries = new Set();
-  const continents = new Set();
-  features.forEach(f => {
-    const p = f.properties;
-    totalDist += p.distance || 0;
-    totalMoving += p.moving_time || 0;
-    totalElapsed += p.elapsed_time || 0;
-    const allCoords = f.geometry.type === 'MultiLineString' ? f.geometry.coordinates.flat() : f.geometry.coordinates;
-    const mid = allCoords[Math.floor(allCoords.length / 2)] || [0, 0];
-    const [lng, lat] = mid;
-    // Country + continent detection
-    if (lat > 49 && lat < 51 && lng > -124 && lng < -122) { countries.add('Canada'); continents.add('North America'); }
-    else if (lat > 20 && lat < 50 && lng > -130 && lng < -60) { countries.add('USA'); continents.add('North America'); }
-    else if (lat > 34 && lat < 36 && lng > 136 && lng < 140) { countries.add('Japan'); continents.add('Asia'); }
-    else if (lat > 46 && lat < 48 && lng > 6 && lng < 9) { countries.add('Switzerland'); continents.add('Europe'); }
-    else if (lat > 18 && lat < 23 && lng > -161 && lng < -154) { countries.add('USA'); continents.add('North America'); }
-  });
-  return {
-    totalDist,
-    totalMoving,
-    totalElapsed,
-    countries,
-    continents,
-    rideCount: features.length
-  };
-}
-
 function refreshStats() {
-  const stats = computeStats(geojson.features);
-  const mi = Math.round(stats.totalDist / 1609.34).toLocaleString();
-  const card = document.getElementById('stats-card');
-  card.innerHTML = `<span class="stats-value">${mi}</span> miles<br>`
-    + `<span class="stats-value">${fmtTime(stats.totalMoving)}</span> riding time<br>`
-    + `<span class="stats-value">${fmtTime(stats.totalElapsed)}</span> elapsed time<br>`
-    + `<span class="stats-value">${stats.continents.size}</span> continents<br>`
-    + `<span class="stats-value">${stats.countries.size}</span> countries`;
+  const totals = geojson.features.reduce((sum, f) => ({
+    mileage: sum.mileage + f.properties.mileage,
+    riding: sum.riding + f.properties.riding_time,
+    elapsed: sum.elapsed + f.properties.elapsed_time,
+  }), { mileage: 0, riding: 0, elapsed: 0 });
+  document.getElementById('stats-card').innerHTML =
+    `<span class="stats-value">${Math.round(totals.mileage).toLocaleString()}</span> miles<br>`
+    + `<span class="stats-value">${fmtTime(totals.riding)}</span> riding time<br>`
+    + `<span class="stats-value">${fmtTime(totals.elapsed)}</span> elapsed time`;
 }
 
-init();
+init().catch(() => {
+  document.getElementById('map').textContent = 'The map is temporarily unavailable while it refreshes. Please try again later.';
+  startFooterMarquee();
+});

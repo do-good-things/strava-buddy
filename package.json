@@ -5,7 +5,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --test",
+    "refresh": "node refresh.js"
   },
   "repository": {
     "type": "git",
@@ -20,9 +21,14 @@
   },
   "homepage": "https://github.com/do-good-things/strava-buddy#readme",
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1134.0",
     "@mapbox/polyline": "^1.2.1",
     "axios": "^1.13.6",
     "dotenv": "^17.3.1",
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "sharp": "^0.35.4"
+  },
+  "engines": {
+    "node": ">=22.10.0"
   }
 }

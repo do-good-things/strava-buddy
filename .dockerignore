@@ -1,0 +1,9 @@
+.git
+node_modules
+.runtime
+.env
+.env.*
+.tokens.json
+.geocache.json
+public/config.js
+public/sarah/data

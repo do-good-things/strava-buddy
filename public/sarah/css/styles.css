@@ -77,3 +77,9 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
    was written. */
 .last-updated:not(:empty)::before { content: '\00b7'; margin: 0 1.5rem; }
 @keyframes marquee-scroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+
+.ride-detail { max-height: calc(100% - 24px); overflow-y: auto; }
+.ride-photos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.ride-photos:not(:empty) { margin-top: 8px; }
+.ride-photos img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 3px; }
+.ride-photos a:focus-visible { outline: 2px solid #ff1493; outline-offset: 2px; }
