@@ -41,6 +41,7 @@ async function main(env = process.env) {
       privateStore: store, publicStore: published, read: createReader(axios, token),
       generateRegions: createRegionGenerator(axios, env.MAPBOX_TOKEN),
       download: url => downloadPhoto(axios, url), full: process.argv.includes('--full'),
+      log: console.log,
     });
     let token = await accessToken({ store, axios, env });
     let result;
