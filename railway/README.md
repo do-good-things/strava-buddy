@@ -2,7 +2,7 @@
 
 The implementation is ready for an authenticated Railway setup and live smoke test. These settings have not been applied to a Railway project.
 
-Use two services from `do-good-things/strava-buddy`, one private bucket, and one volume attached only to the worker. Both services ultimately follow `main`; validate the branch in an isolated staging environment first.
+Use two services from `do-good-things/strava-buddy`, one private bucket, and one volume attached only to the worker. Both services ultimately follow `main`; validate the branch in an isolated staging environment first. During staging, leave the worker's Cron Schedule empty and start it only with **Run now**. Enable a production schedule only after a complete snapshot has been verified.
 
 ## Service settings
 
@@ -12,7 +12,7 @@ Use two services from `do-good-things/strava-buddy`, one private bucket, and one
 | Root directory | `/` | `/` |
 | Build | Railpack / Node.js | Railpack / Node.js |
 | Start command | `npm start` | `npm run refresh` |
-| Cron schedule | None | `0 10 * * *` (daily 10:00 UTC) |
+| Cron schedule | None | **Staging: None. Production later: `0 10 * * *` (daily 10:00 UTC)** |
 | Restart policy | On failure | Never |
 | Health check | `/healthz` | None (job exits) |
 | Public domain | Keep current domain | None |
@@ -47,12 +47,12 @@ The worker writes rotated tokens to its persistent volume immediately. After a s
 
 ## Rollout order
 
-1. Create the bucket and worker-only volume in staging; attach variables and use this branch for both staging services. Keep the current production website unchanged.
-2. Run the worker manually once. The initial fetch can span multiple Strava quota windows. It needs to successfully fetch route details, photo lists/images, and geocoding data.
+1. Create the bucket and worker-only volume in staging; attach variables and use this branch for both staging services. Keep the current production website unchanged. Leave **Cron Schedule** blank on `strava-refresh`.
+2. Click **Run now** to start the worker manually. The initial fetch can span multiple Strava quota windows. It needs to successfully fetch route details, photo lists/images, and geocoding data.
 3. Check that the worker exits, then run it again: unchanged detailed routes and fresh photo bytes should be reused, while summaries/photo lists are checked.
 4. Check `/readyz`, the map, region filters, ride selection, stats, GPX download, and photos at desktop and mobile sizes. Inspect `/sarah/map.json` to confirm only approved fields. Confirm `/sarah/data/rides.json` and `/sarah/data/profile.json` return 404.
-5. Enable the daily cron and monitor `/readyz` plus worker failures. Railway skips a cron execution if the previous one is still running. The script caps runtime and releases/reclaims its lock.
-6. After review, merge to `main`, point the production worker at `main`, and produce a fresh production snapshot before deploying the new web service against that bucket. This avoids an empty map during cutover.
+5. Keep staging manual while authentication and the first complete snapshot are being validated. Only after review should you merge to `main`, point the production worker at `main`, enable the daily cron, and monitor `/readyz` plus worker failures. Railway skips a cron execution if the previous one is still running. The script caps runtime and releases/reclaims its lock.
+6. Produce a fresh production snapshot before deploying the new web service against that bucket. This avoids an empty map during cutover.
 
 The web deployment does not carry any API-data fallback. Do not roll back to the old static-data deployment to handle a refresh outage: it would restore raw JSON exposure. Keep the last working version of the new server for rollback.
 

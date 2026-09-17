@@ -62,6 +62,6 @@ Expiration prevents serving old content; physical cleanup still requires the sch
 
 ## Railway deployment
 
-See [railway/README.md](railway/README.md) for the exact service settings, storage mapping, and rollout order. Develop on `incremental-refresh`; both production services should use `main` after review and merge. Code deployment is separate from daily data publication.
+See [railway/README.md](railway/README.md) for the exact service settings, storage mapping, and rollout order. Develop on `incremental-refresh`; both production services should use `main` after review and merge. The staging worker is intentionally manual: leave its Cron Schedule empty and use Railway's **Run now** action until the first complete snapshot is verified. Code deployment is separate from data publication.
 
 Deleting raw JSON from the current tree does not remove it from existing Git history, old deployment images, or your previous checkout. Those require separate cleanup if desired; this change does not rewrite repository history.
