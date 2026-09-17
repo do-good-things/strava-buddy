@@ -177,7 +177,7 @@ test('token rotation persists only required token fields and uses saved tokens o
   let calls = 0;
   const axios = { post: async (url, body) => {
     calls++;
-    assert.equal(body.refresh_token, 'bootstrap');
+    assert.ok(['bootstrap', 'rotated'].includes(body.refresh_token));
     return { data: { access_token: 'new', refresh_token: 'rotated', expires_at: time / 1000 + 3600, athlete: { private: true } } };
   } };
   const env = { STRAVA_REFRESH_TOKEN: 'bootstrap' };
@@ -185,6 +185,8 @@ test('token rotation persists only required token fields and uses saved tokens o
   assert.deepEqual(Object.keys(await readJson(store, 'tokens.json')).sort(), ['access_token', 'expires_at', 'refresh_token']);
   assert.equal(await accessToken({ store, axios, env, now }), 'new');
   assert.equal(calls, 1);
+  assert.equal(await accessToken({ store, axios, env, now, force: true }), 'new');
+  assert.equal(calls, 2);
 });
 
 module.exports = { MemoryStore };

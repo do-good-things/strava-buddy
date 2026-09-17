@@ -37,12 +37,22 @@ async function main(env = process.env) {
       } catch (err) { if (err.code !== 'ENOENT') throw err; }
     }
     await pruneExpired({ privateStore: store, publicStore: published });
-    const token = await accessToken({ store, axios, env });
-    const result = await runRefresh({
+    const run = token => runRefresh({
       privateStore: store, publicStore: published, read: createReader(axios, token),
       generateRegions: createRegionGenerator(axios, env.MAPBOX_TOKEN),
       download: url => downloadPhoto(axios, url), full: process.argv.includes('--full'),
     });
+    let token = await accessToken({ store, axios, env });
+    let result;
+    try {
+      result = await run(token);
+    } catch (err) {
+      // Strava access tokens can be revoked before their recorded expiry. Rotate
+      // once on a 401, then retry using the persisted refresh token.
+      if (!/Strava request failed \(401\)/.test(err.message)) throw err;
+      token = await accessToken({ store, axios, env, force: true });
+      result = await run(token);
+    }
     console.log(`Published ${result.rides.length + result.ebikeRides.length} rides: ${result.reused} cached routes, ${result.fetched} fetched.`);
   } finally {
     clearTimeout(timeout);
