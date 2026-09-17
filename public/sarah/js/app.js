@@ -103,7 +103,10 @@ function showLastUpdated(iso) {
 
 async function init() {
   const response = await fetch('/sarah/map.json', { cache: 'no-store' });
-  if (!response.ok) throw new Error('Map data unavailable');
+  if (!response.ok) {
+    if (response.status === 503) throw new Error('The map is getting its first refresh. Please check back soon.');
+    throw new Error('The map is temporarily unavailable. Please check back soon.');
+  }
   const snapshot = await response.json();
   geojson = snapshot.rides;
   REGIONS = snapshot.regions;
@@ -354,7 +357,9 @@ function refreshStats() {
     + `<span class="stats-value">${fmtTime(totals.elapsed)}</span> elapsed time`;
 }
 
-init().catch(() => {
-  document.getElementById('map').textContent = 'The map is temporarily unavailable while it refreshes. Please try again later.';
+init().catch(error => {
+  const mapElement = document.getElementById('map');
+  mapElement.classList.add('map-empty-state');
+  mapElement.textContent = error.message || 'The map is temporarily unavailable. Please check back soon.';
   startFooterMarquee();
 });
