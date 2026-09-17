@@ -16,14 +16,18 @@ if (!process.env.STRAVA_CLIENT_ID || !process.env.STRAVA_CLIENT_SECRET) {
 
 const app = express();
 
-app.get('/auth/strava', (req, res) => {
+function authorizationUrl() {
   const url = new URL('https://www.strava.com/oauth/authorize');
   url.searchParams.set('client_id', process.env.STRAVA_CLIENT_ID);
   url.searchParams.set('response_type', 'code');
   url.searchParams.set('redirect_uri', redirectUri);
   url.searchParams.set('approval_prompt', 'force');
   url.searchParams.set('scope', scope);
-  res.redirect(url.toString());
+  return url.toString();
+}
+
+app.get('/auth/strava', (req, res) => {
+  res.redirect(authorizationUrl());
 });
 
 app.get('/auth/callback', async (req, res) => {
@@ -52,10 +56,16 @@ app.get('/auth/callback', async (req, res) => {
   }
 });
 
-app.get('/', (req, res) => res.redirect('/auth/strava'));
+app.get('/', (req, res) => res.type('text').send(`Open /auth/strava to begin Strava authorization.\nCallback: ${redirectUri}\n`));
 
-app.listen(port, () => {
+const server = app.listen(port, () => {
   console.log(`Strava authorization server running at http://localhost:${port}`);
   console.log(`Open http://localhost:${port}/auth/strava in your browser.`);
+  console.log(`Authorization URL: ${authorizationUrl()}`);
   console.log(`Callback must be registered in Strava as ${redirectUri}`);
+});
+server.on('error', err => {
+  if (err.code === 'EADDRINUSE') console.error(`Port ${port} is already in use. Stop the other local server first.`);
+  else console.error(`Authorization server failed: ${err.message}`);
+  process.exitCode = 1;
 });
