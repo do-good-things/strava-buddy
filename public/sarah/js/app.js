@@ -104,7 +104,7 @@ function showLastUpdated(iso) {
 async function init() {
   const response = await fetch('/sarah/map.json', { cache: 'no-store' });
   if (!response.ok) {
-    if (response.status === 503) throw new Error('The map is getting its first refresh. Please check back soon.');
+    if (response.status === 503) throw new Error('We are currently offline. Please check back soon.');
     throw new Error('The map is temporarily unavailable. Please check back soon.');
   }
   const snapshot = await response.json();
