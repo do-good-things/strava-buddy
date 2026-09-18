@@ -283,6 +283,10 @@ function selectRide(id, { fit = true } = {}) {
         // routes while the chooser is open.
         selectedId = null;
         overlapClickInProgress = true;
+        // Touch events do not always bubble back through the map-level click
+        // handler. Clear the guard after this event so the next tap can close
+        // the chooser even when the map handler never saw the opening tap.
+        setTimeout(() => { overlapClickInProgress = false; }, 0);
         overlapFilter = ['match', ['id'], ids, true, false];
         hideRideDetail();
         map.setFilter('rides-layer', activeRouteFilter());
@@ -321,6 +325,18 @@ function fmtTime(s) { const h = Math.floor(s / 3600), m = Math.floor((s % 3600) 
 function showOverlapChooser(ids, onSelect) {
   const chooser = document.getElementById('overlap-chooser');
   chooser.replaceChildren();
+  chooser.classList.remove('collapsed');
+  const toggle = document.createElement('button');
+  toggle.type = 'button';
+  toggle.className = 'overlap-toggle';
+  toggle.setAttribute('aria-expanded', 'true');
+  toggle.textContent = 'hide rides';
+  toggle.addEventListener('click', () => {
+    const collapsed = chooser.classList.toggle('collapsed');
+    toggle.setAttribute('aria-expanded', String(!collapsed));
+    toggle.textContent = collapsed ? 'show rides' : 'hide rides';
+  });
+  chooser.appendChild(toggle);
   const orderedIds = [...ids].sort((a, b) => {
     const aTime = new Date(geojson.features[a].properties.date).getTime();
     const bTime = new Date(geojson.features[b].properties.date).getTime();
@@ -413,6 +429,7 @@ function placeRideSplash() {
           top: Math.min(start.y, end.y) - 8,
           right: Math.max(start.x, end.x) + 8,
           bottom: Math.max(start.y, end.y) + 8,
+          isRoute: true,
         });
       }
     });
@@ -444,9 +461,27 @@ function placeRideSplash() {
       }
     }
   }
+  // On small maps a selected route can occupy nearly every open pixel. Keep
+  // the splash visible by retrying against only interactive controls before
+  // falling back to the lower edge of the map.
   if (!placed) {
-    splash.style.visibility = 'hidden';
-    return;
+    const controls = obstacles.filter(obstacle => !obstacle.isRoute);
+    for (let row = 0; row <= 8 && !placed; row++) {
+      for (let column = 0; column <= 12 && !placed; column++) {
+        const candidateLeft = padding + (maxLeft - padding) * (column / 12);
+        const candidateTop = padding + (maxTop - padding) * (row / 8);
+        if (!controls.some(obstacle => overlaps(candidateLeft, candidateTop, obstacle))) {
+          left = candidateLeft;
+          top = candidateTop;
+          placed = true;
+        }
+      }
+    }
+  }
+  if (!placed) {
+    left = padding;
+    top = maxTop;
+    placed = true;
   }
   splash.style.left = `${Math.round(left)}px`;
   splash.style.top = `${Math.round(top)}px`;
