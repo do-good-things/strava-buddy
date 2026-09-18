@@ -104,19 +104,55 @@ function showLastUpdated(iso) {
 }
 
 async function init() {
-  const [ridesRes, ebikeRes, regionsRes] = await Promise.all([
-    fetch('/sarah/data/rides.json'),
-    fetch('/sarah/data/ebike-rides.json'),
-    fetch('/sarah/data/regions.json')
-  ]);
-  if (!ridesRes.ok) { console.error('Failed to load ride data'); return; }
-  geojson = await ridesRes.json();
-  if (ebikeRes.ok) {
-    const ebike = await ebikeRes.json();
-    ebike.features.forEach(f => { f.properties.ebike = true; });
-    geojson.features.push(...ebike.features);
-  }
-  if (regionsRes.ok) REGIONS = await regionsRes.json();
+  // Start the route download and base map together. Neither waits for the other.
+  const rideData = fetch('/sarah/data/map-rides.json').then(response => {
+    if (!response.ok) throw new Error(`Unable to load rides (${response.status})`);
+    return response.json();
+  });
+  // Init map
+  mapboxgl.accessToken = MAPBOX_TOKEN;
+  // Outdoors defaults to globe, which rasterizes map layers at wider zooms.
+  // Mobile region fits reach those zooms; Mercator keeps them crisp throughout.
+  map = new mapboxgl.Map({ container: 'map', style: 'mapbox://styles/mapbox/outdoors-v12', projection: 'mercator', attributionControl: false, fadeDuration: 0, ...home() });
+  map.addControl(new MapboxGeocoder({ accessToken: MAPBOX_TOKEN, mapboxgl, marker: false, collapsed: true, placeholder: 'Search', flyTo: { speed: 5, curve: 1, zoom: 11 } }), 'top-right');
+  const geoInput = document.querySelector('.mapboxgl-ctrl-geocoder input');
+  if (geoInput) { geoInput.spellcheck = false; geoInput.autocomplete = 'off'; geoInput.autocorrect = 'off'; geoInput.autocapitalize = 'off'; }
+
+  map.once('style.load', () => {
+    // Remove labels/POIs and hide translucent water overlays. Keep the base
+    // map layers at their native opacity so region fits remain crisp.
+    const FADE = 1;
+    map.getStyle().layers.forEach(layer => {
+      if (layer.id.match(/label|poi|place|shield|road-number|contour/i)) {
+        map.setLayoutProperty(layer.id, 'visibility', 'none');
+        return;
+      }
+      if (/^(water-depth|water-shadow|waterway-shadow)$/.test(layer.id)) {
+        map.setLayoutProperty(layer.id, 'visibility', 'none');
+        return;
+      }
+      if (layer.id === 'water' || layer.id === 'waterway') return;
+      const opacityProp = { fill: 'fill-opacity', line: 'line-opacity', background: 'background-opacity', symbol: 'text-opacity', 'fill-extrusion': 'fill-extrusion-opacity', circle: 'circle-opacity', raster: 'raster-opacity' }[layer.type];
+      if (opacityProp) {
+        const current = map.getPaintProperty(layer.id, opacityProp);
+        map.setPaintProperty(layer.id, opacityProp, (typeof current === 'number' ? current : 1) * FADE);
+      }
+    });
+  });
+
+  const mapReady = new Promise(resolve => map.once('load', resolve));
+  const data = await rideData;
+  if (data.format !== 'polyline5') throw new Error('Unsupported ride data format');
+  geojson = data.rides;
+  REGIONS = data.regions;
+  geojson.features.forEach(feature => {
+    const geometry = feature.geometry;
+    const parts = geometry.polylines.map(encoded => polyline.toGeoJSON(encoded).coordinates);
+    feature.geometry = {
+      type: geometry.type,
+      coordinates: geometry.type === 'MultiLineString' ? parts : parts[0],
+    };
+  });
 
   showLastUpdated(geojson.generated_at);
   startFooterMarquee(); // after the timestamp lands, so widths measure correctly
@@ -152,6 +188,9 @@ async function init() {
   const counts = {};
   geojson.features.forEach(f => { counts[f.properties.region] = (counts[f.properties.region] || 0) + 1; });
 
+  // Install filters only after the base map is ready.
+  await mapReady;
+
   // Build tabs
   const regionsEl = document.getElementById('regions');
   addTab(regionsEl, 'all', geojson.features.length, (btn) => {
@@ -182,38 +221,7 @@ async function init() {
     });
   });
 
-  // Init map
-  mapboxgl.accessToken = MAPBOX_TOKEN;
-  // Outdoors defaults to globe, which rasterizes map layers at wider zooms.
-  // Mobile region fits reach those zooms; Mercator keeps them crisp throughout.
-  map = new mapboxgl.Map({ container: 'map', style: 'mapbox://styles/mapbox/outdoors-v12', projection: 'mercator', attributionControl: false, fadeDuration: 0, ...home() });
-  map.addControl(new MapboxGeocoder({ accessToken: MAPBOX_TOKEN, mapboxgl, marker: false, collapsed: true, placeholder: 'Search', flyTo: { speed: 5, curve: 1, zoom: 11 } }), 'top-right');
-  const geoInput = document.querySelector('.mapboxgl-ctrl-geocoder input');
-  if (geoInput) { geoInput.spellcheck = false; geoInput.autocomplete = 'off'; geoInput.autocorrect = 'off'; geoInput.autocapitalize = 'off'; }
-
-  map.once('style.load', () => {
-    // Remove labels/POIs and hide translucent water overlays. Keep the base
-    // map layers at their native opacity so region fits remain crisp.
-    const FADE = 1;
-    map.getStyle().layers.forEach(layer => {
-      if (layer.id.match(/label|poi|place|shield|road-number|contour/i)) {
-        map.setLayoutProperty(layer.id, 'visibility', 'none');
-        return;
-      }
-      if (/^(water-depth|water-shadow|waterway-shadow)$/.test(layer.id)) {
-        map.setLayoutProperty(layer.id, 'visibility', 'none');
-        return;
-      }
-      if (layer.id === 'water' || layer.id === 'waterway') return;
-      const opacityProp = { fill: 'fill-opacity', line: 'line-opacity', background: 'background-opacity', symbol: 'text-opacity', 'fill-extrusion': 'fill-extrusion-opacity', circle: 'circle-opacity', raster: 'raster-opacity' }[layer.type];
-      if (opacityProp) {
-        const current = map.getPaintProperty(layer.id, opacityProp);
-        map.setPaintProperty(layer.id, opacityProp, (typeof current === 'number' ? current : 1) * FADE);
-      }
-    });
-  });
-
-  map.on('load', () => {
+  {
     const rideWidth = () => 2;
     if (window.ResizeObserver) {
       let resizeFrame = 0;
@@ -345,7 +353,16 @@ async function init() {
       hideRideDetail();
       applyFilter(applyFilter._current);
     }, true);
-  });
+    const status = document.getElementById('map-status');
+    const showLoaded = () => {
+      if (map.isSourceLoaded('rides')) {
+        status.hidden = true;
+        map.off('sourcedata', showLoaded);
+      }
+    };
+    map.on('sourcedata', showLoaded);
+    showLoaded();
+  }
 }
 
 function fmtTime(s) { const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60); return h > 0 ? `${h}h ${m}m` : `${m}m`; }
@@ -610,4 +627,7 @@ function refreshStats() {
     + `<span class="stats-value">${stats.countries.size}</span> countries`;
 }
 
-init();
+init().catch(error => {
+  console.error('Unable to load map:', error);
+  document.getElementById('map-status').textContent = 'Rides couldn’t load. Refresh to try again.';
+});

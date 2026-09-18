@@ -6,11 +6,16 @@
   <title>ride sometime</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="apple-touch-icon" href="/favicon.svg">
+  <link rel="preconnect" href="https://api.mapbox.com" crossorigin>
+  <link rel="preload" href="/sarah/data/map-rides.json" as="fetch" crossorigin>
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.4.0/mapbox-gl.css" rel="stylesheet">
   <link href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.3/mapbox-gl-geocoder.css" rel="stylesheet">
   <link href="/sarah/css/styles.css" rel="stylesheet">
-  <script src="https://api.mapbox.com/mapbox-gl-js/v3.4.0/mapbox-gl.js"></script>
-  <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.3/mapbox-gl-geocoder.min.js"></script>
+  <script defer src="https://api.mapbox.com/mapbox-gl-js/v3.4.0/mapbox-gl.js"></script>
+  <script defer src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.3/mapbox-gl-geocoder.min.js"></script>
+  <script defer src="/sarah/config.js"></script>
+  <script defer src="/sarah/js/polyline.js"></script>
+  <script defer src="/sarah/js/app.js"></script>
 </head>
 <body>
   <div class="container">
@@ -20,6 +25,7 @@
         <div class="overlap-chooser" id="overlap-chooser"></div>
         <div id="ride-splash" class="ride-splash" aria-live="polite"></div>
         <div id="map"></div>
+        <div id="map-status" class="map-status" role="status">Loading rides…</div>
       </div>
     </div>
   </div>
@@ -32,7 +38,5 @@
     </div>
   </footer>
 
-  <script src="/sarah/config.js"></script>
-  <script src="/sarah/js/app.js"></script>
 </body>
 </html>
