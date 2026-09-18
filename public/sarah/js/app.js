@@ -2,8 +2,9 @@ let REGIONS = [];
 const home = () => ({ center: [-122.52, 37.82], zoom: window.innerWidth <= 600 ? 10 : 11 });
 const LINE_COLOR = '#ff1493';
 const NO_MATCH = ['==', ['id'], -1];
+const ROUTE_OPACITY = 0.9;
 
-let map, geojson, activeRegion = null, selectedId = null;
+let map, geojson, activeRegion = null, selectedId = null, overlapFilter = null;
 
 // Split a LineString into MultiLineString when consecutive points are > maxGapKm apart
 function splitGaps(coords, maxGapKm = 5) {
@@ -187,8 +188,9 @@ async function init() {
   if (geoInput) { geoInput.spellcheck = false; geoInput.autocomplete = 'off'; geoInput.autocorrect = 'off'; geoInput.autocapitalize = 'off'; }
 
   map.once('style.load', () => {
-    // Remove labels/POIs, hide translucent water overlays, then lightly fade base layers
-    const FADE = 0.55;
+    // Remove labels/POIs, hide translucent water overlays, then fade base layers
+    // independently from the route layers added below.
+    const FADE = 0.4;
     map.getStyle().layers.forEach(layer => {
       if (layer.id.match(/label|poi|place|shield|road-number|contour/i)) {
         map.setLayoutProperty(layer.id, 'visibility', 'none');
@@ -208,127 +210,133 @@ async function init() {
   });
 
   map.on('load', () => {
-    const mobileQuery = window.matchMedia('(max-width: 600px)');
-    const rideWidth = () => mobileQuery.matches ? 2 : 3;
+    const rideWidth = () => 2;
+    let overlapClickInProgress = false;
     map.addSource('rides', { type: 'geojson', data: geojson, tolerance: 0.5 });
     map.addLayer({ id: 'rides-hit', type: 'line', source: 'rides', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': '#000', 'line-width': 14, 'line-opacity': 0 } });
     map.addLayer({ id: 'rides-layer', type: 'line', source: 'rides', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': LINE_COLOR, 'line-width': rideWidth(), 'line-opacity': 0.9 } });
     map.addLayer({ id: 'rides-dim', type: 'line', source: 'rides', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': '#aaaaaa', 'line-width': rideWidth(), 'line-opacity': 1 }, filter: NO_MATCH });
-    map.addLayer({ id: 'rides-highlight', type: 'line', source: 'rides', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': LINE_COLOR, 'line-width': rideWidth() + 2, 'line-opacity': 1 }, filter: NO_MATCH });
-    mobileQuery.addEventListener('change', () => {
-      const w = rideWidth();
-      ['rides-layer', 'rides-dim'].forEach(id => map.setPaintProperty(id, 'line-width', w));
-      map.setPaintProperty('rides-highlight', 'line-width', w + 2);
-    });
-
+    map.addLayer({ id: 'rides-highlight', type: 'line', source: 'rides', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': LINE_COLOR, 'line-width': rideWidth(), 'line-opacity': 1 }, filter: NO_MATCH });
     function dimFilter(hoveredId) {
-      const base = ['!=', ['id'], hoveredId];
-      return applyFilter._current ? ['all', applyFilter._current, base] : base;
+      const ids = Array.isArray(hoveredId) ? hoveredId : [hoveredId];
+      const base = ['match', ['id'], ids, false, true];
+      const filter = activeRouteFilter();
+      return filter ? ['all', filter, base] : base;
     }
     function highlightFilter(hoveredId) {
-      const base = ['==', ['id'], hoveredId];
-      return applyFilter._current ? ['all', applyFilter._current, base] : base;
+      const ids = Array.isArray(hoveredId) ? hoveredId : [hoveredId];
+      const base = ['match', ['id'], ids, true, false];
+      const filter = activeRouteFilter();
+      return filter ? ['all', filter, base] : base;
     }
-    map.on('mouseenter', 'rides-hit', () => { if (selectedId === null) map.getCanvas().style.cursor = 'pointer'; });
-    map.on('mouseleave', 'rides-hit', () => { map.getCanvas().style.cursor = ''; if (selectedId === null) { map.setFilter('rides-dim', NO_MATCH); map.setFilter('rides-highlight', NO_MATCH); } });
-    map.on('mousemove', 'rides-hit', e => { if (selectedId === null && e.features.length) { const id = e.features[0].id; map.setFilter('rides-dim', dimFilter(id)); map.setFilter('rides-highlight', highlightFilter(id)); } });
+    function fitRoutes(ids, onSettled) {
+      const bounds = new mapboxgl.LngLatBounds();
+      ids.forEach(id => {
+        const geom = geojson.features[id].geometry;
+        const coords = geom.type === 'MultiLineString' ? geom.coordinates.flat() : geom.coordinates;
+        coords.forEach(coord => bounds.extend(coord));
+      });
+      if (!bounds.isEmpty()) {
+        map.once('moveend', () => requestAnimationFrame(onSettled || placeRideSplash));
+        map.fitBounds(bounds, { padding: 60, duration: 1000 });
+      } else if (onSettled) {
+        onSettled();
+      }
+    }
+    map.on('mouseleave', 'rides-hit', () => { if (selectedId === null) { map.setFilter('rides-dim', NO_MATCH); map.setFilter('rides-highlight', NO_MATCH); } });
+    map.on('mousemove', 'rides-hit', e => {
+      if (selectedId === null && e.features.length) {
+        const ids = [...new Set(e.features.map(feature => feature.id))];
+        map.setFilter('rides-dim', dimFilter(ids));
+        map.setFilter('rides-highlight', highlightFilter(ids));
+      }
+    });
 
-    function selectRide(id, { fit = true } = {}) {
+function selectRide(id, { fit = true } = {}) {
       selectedId = id;
       setActiveTab(document.querySelector('.region-btn'));
       activeRegion = null;
       map.setFilter('rides-hit', NO_MATCH);
-      map.setFilter('rides-dim', NO_MATCH);
-      map.setFilter('rides-highlight', ['==', ['id'], selectedId]);
-      if (fit) map.setFilter('rides-layer', ['==', ['id'], selectedId]);
+      // Reuse the same dim/highlight layers as geographic-region hover so a
+      // chosen overlapping ride has exactly the same visual treatment.
+      map.setFilter('rides-dim', dimFilter(selectedId));
+      map.setFilter('rides-highlight', highlightFilter(selectedId));
+      map.setFilter('rides-layer', activeRouteFilter());
+      map.setPaintProperty('rides-layer', 'line-opacity', ROUTE_OPACITY);
       map.getCanvas().style.cursor = '';
-      showRideDetail(geojson.features[selectedId].properties);
       setActiveOverlapOption(selectedId);
-      if (!fit) return;
-      const bounds = new mapboxgl.LngLatBounds();
-      const geom = geojson.features[selectedId].geometry;
-      const clickCoords = geom.type === 'MultiLineString' ? geom.coordinates.flat() : geom.coordinates;
-      clickCoords.forEach(c => bounds.extend(c));
-      map.fitBounds(bounds, { padding: 60, duration: 1000 });
+      const ride = geojson.features[selectedId].properties;
+      if (!fit) {
+        showRideSplash(ride);
+        return;
+      }
+      hideRideSplash();
+      fitRoutes([selectedId], () => showRideSplash(ride));
     }
 
     map.on('click', 'rides-hit', e => {
       if (!e.features.length) return;
       const ids = [...new Set(e.features.map(feature => feature.id))];
       if (ids.length > 1) {
-        selectRide(ids[0]);
-        // Keep every route that occupies the clicked map point visible while
-        // the chooser is open. The selected route is still shown in the detail card.
-        const matches = ['match', ['id'], ids, true, false];
-        map.setFilter('rides-layer', matches);
+        // Opening the chooser is not a selection. Keep the overlapping rides
+        // visible until the user explicitly chooses one, and hide unrelated
+        // routes while the chooser is open.
+        selectedId = null;
+        overlapClickInProgress = true;
+        overlapFilter = ['match', ['id'], ids, true, false];
+        hideRideDetail();
+        map.setFilter('rides-layer', activeRouteFilter());
         map.setFilter('rides-hit', NO_MATCH);
         map.setFilter('rides-dim', NO_MATCH);
-        map.setFilter('rides-highlight', ['==', ['id'], ids[0]]);
-        showOverlapChooser(ids, id => selectRide(id, { fit: false }));
+        map.setFilter('rides-highlight', NO_MATCH);
+        map.setPaintProperty('rides-layer', 'line-opacity', ROUTE_OPACITY);
+        fitRoutes(ids);
+        showOverlapChooser(ids, id => selectRide(id));
         return;
       }
       selectRide(ids[0]);
     });
 
     map.on('click', e => {
-      if (selectedId === null) return;
-      if (map.queryRenderedFeatures(e.point, { layers: ['rides-hit'] }).length) return;
+      // The layer click that opens the chooser also bubbles to this map-level
+      // handler. Let that opening click finish; clear on the next click away.
+      if (overlapClickInProgress) {
+        overlapClickInProgress = false;
+        return;
+      }
+      if (selectedId === null && overlapFilter === null) return;
+      if (selectedId !== null && map.queryRenderedFeatures(e.point, { layers: ['rides-hit'] }).length) return;
       selectedId = null;
+      overlapFilter = null;
       hideRideDetail();
-      applyFilter(null);
+      // Restore the geographic filter that was active before the overlap
+      // chooser opened, rather than resetting the whole map to "all".
+      applyFilter(applyFilter._current);
     });
   });
 }
 
 function fmtTime(s) { const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60); return h > 0 ? `${h}h ${m}m` : `${m}m`; }
 
-function toGpx(feature) {
-  const name = feature.properties.name.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
-  const geom = feature.geometry;
-  const segments = geom.type === 'MultiLineString' ? geom.coordinates : [geom.coordinates];
-  const trksegs = segments.map(seg =>
-    '    <trkseg>\n' + seg.map(([lng, lat]) => `      <trkpt lat="${lat}" lon="${lng}"></trkpt>`).join('\n') + '\n    </trkseg>'
-  ).join('\n');
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="ridesometime" xmlns="http://www.topografix.com/GPX/1/1">\n  <trk>\n    <name>${name}</name>\n${trksegs}\n  </trk>\n</gpx>`;
-}
-
-function downloadGpx() {
-  if (selectedId === null) return;
-  const feature = geojson.features[selectedId];
-  const gpx = toGpx(feature);
-  const slug = feature.properties.name.replace(/[^a-z0-9]+/gi, '_').toLowerCase();
-  const blob = new Blob([gpx], { type: 'application/gpx+xml' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `${slug}.gpx`;
-  a.click();
-  URL.revokeObjectURL(a.href);
-}
-
-function showRideDetail(p) {
-  const mi = (p.distance / 1609.34).toFixed(1);
-  document.getElementById('ride-name').textContent = p.name;
-  document.getElementById('ride-stats').innerHTML = `${p.ebike ? '⚡ ' : ''}${mi} mi<br>${fmtTime(p.moving_time)} riding time<br>${fmtTime(p.elapsed_time)} total`;
-  document.getElementById('gpx-btn').onclick = downloadGpx;
-  document.getElementById('info-panel').style.display = 'none';
-  document.getElementById('ride-detail').classList.add('visible');
-}
-
 function showOverlapChooser(ids, onSelect) {
   const chooser = document.getElementById('overlap-chooser');
   chooser.replaceChildren();
-  const label = document.createElement('div');
-  label.className = 'overlap-label';
-  label.textContent = `${ids.length} overlapping rides`;
-  chooser.appendChild(label);
-  ids.forEach((id, index) => {
+  const orderedIds = [...ids].sort((a, b) => {
+    const aTime = new Date(geojson.features[a].properties.date).getTime();
+    const bTime = new Date(geojson.features[b].properties.date).getTime();
+    return (Number.isNaN(bTime) ? -Infinity : bTime) - (Number.isNaN(aTime) ? -Infinity : aTime);
+  });
+  orderedIds.forEach(id => {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'overlap-option';
     button.dataset.rideId = id;
-    button.textContent = geojson.features[id].properties.name;
+    const date = new Date(geojson.features[id].properties.date);
+    const pad = value => String(value).padStart(2, '0');
+    button.textContent = Number.isNaN(date.getTime())
+      ? 'unknown date'
+      : `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
     button.addEventListener('click', () => onSelect(id));
-    if (index === 0) button.classList.add('active');
     chooser.appendChild(button);
   });
 }
@@ -341,9 +349,113 @@ function setActiveOverlapOption(id) {
 
 function hideRideDetail() {
   document.getElementById('overlap-chooser').replaceChildren();
-  document.getElementById('ride-detail').classList.remove('visible');
-  document.getElementById('info-panel').style.display = '';
+  hideRideSplash();
 }
+
+function showRideSplash(p) {
+  const splash = document.getElementById('ride-splash');
+  splash.replaceChildren();
+  const title = document.createElement('div');
+  title.className = 'splash-title';
+  title.textContent = p.name;
+  const miles = document.createElement('div');
+  miles.className = 'splash-detail';
+  miles.textContent = `${(p.distance / 1609.34).toFixed(1)} mi`;
+  const moving = document.createElement('div');
+  moving.className = 'splash-detail';
+  moving.textContent = `${fmtTime(p.moving_time)} ride time`;
+  const elapsed = document.createElement('div');
+  elapsed.className = 'splash-detail';
+  elapsed.textContent = `${fmtTime(p.elapsed_time)} elapsed time`;
+  splash.append(title, miles, moving, elapsed);
+  splash.classList.add('visible');
+  splash.style.visibility = 'hidden';
+  requestAnimationFrame(placeRideSplash);
+}
+
+function hideRideSplash() {
+  const splash = document.getElementById('ride-splash');
+  splash.classList.remove('visible');
+  splash.style.visibility = '';
+  splash.replaceChildren();
+}
+
+function placeRideSplash() {
+  const splash = document.getElementById('ride-splash');
+  const wrap = document.querySelector('.map-wrap');
+  if (!splash || !wrap || !splash.classList.contains('visible')) return;
+  const padding = 16;
+  const width = splash.offsetWidth;
+  const height = splash.offsetHeight;
+  const maxLeft = Math.max(padding, wrap.clientWidth - width - padding);
+  const maxTop = Math.max(padding, wrap.clientHeight - height - padding);
+  const wrapRect = wrap.getBoundingClientRect();
+  const obstacles = [...wrap.querySelectorAll('#overlap-chooser, .mapboxgl-ctrl-geocoder, .mapboxgl-ctrl-group')]
+    .filter(el => el !== splash && el.getClientRects().length)
+    .map(el => {
+      const rect = el.getBoundingClientRect();
+      return {
+        left: rect.left - wrapRect.left - padding,
+        top: rect.top - wrapRect.top - padding,
+        right: rect.right - wrapRect.left + padding,
+        bottom: rect.bottom - wrapRect.top + padding,
+      };
+    });
+  if (selectedId !== null && map) {
+    const geometry = geojson.features[selectedId].geometry;
+    const routeParts = geometry.type === 'MultiLineString' ? geometry.coordinates : [geometry.coordinates];
+    routeParts.forEach(coords => {
+      for (let i = 1; i < coords.length; i += 3) {
+        const start = map.project(coords[i - 1]);
+        const end = map.project(coords[Math.min(i + 2, coords.length - 1)]);
+        obstacles.push({
+          left: Math.min(start.x, end.x) - 8,
+          top: Math.min(start.y, end.y) - 8,
+          right: Math.max(start.x, end.x) + 8,
+          bottom: Math.max(start.y, end.y) + 8,
+        });
+      }
+    });
+  }
+  const overlaps = (left, top, obstacle) => left < obstacle.right && left + width > obstacle.left && top < obstacle.bottom && top + height > obstacle.top;
+  const random = (max, min) => min + Math.random() * Math.max(0, max - min);
+  let left = padding, top = padding;
+  let placed = false;
+  for (let attempt = 0; attempt < 80; attempt++) {
+    const candidateLeft = random(maxLeft, padding);
+    const candidateTop = random(maxTop, padding);
+    if (!obstacles.some(obstacle => overlaps(candidateLeft, candidateTop, obstacle))) {
+      left = candidateLeft;
+      top = candidateTop;
+      placed = true;
+      break;
+    }
+  }
+  if (!placed) {
+    for (let row = 0; row <= 8 && !placed; row++) {
+      for (let column = 0; column <= 12 && !placed; column++) {
+        const candidateLeft = padding + (maxLeft - padding) * (column / 12);
+        const candidateTop = padding + (maxTop - padding) * (row / 8);
+        if (!obstacles.some(obstacle => overlaps(candidateLeft, candidateTop, obstacle))) {
+          left = candidateLeft;
+          top = candidateTop;
+          placed = true;
+        }
+      }
+    }
+  }
+  if (!placed) {
+    splash.style.visibility = 'hidden';
+    return;
+  }
+  splash.style.left = `${Math.round(left)}px`;
+  splash.style.top = `${Math.round(top)}px`;
+  splash.style.visibility = 'visible';
+}
+
+window.addEventListener('resize', () => {
+  if (document.getElementById('ride-splash')?.classList.contains('visible')) requestAnimationFrame(placeRideSplash);
+});
 
 function addTab(parent, name, count, onClick) {
   const btn = document.createElement('button');
@@ -359,13 +471,20 @@ function setActiveTab(btn) {
 }
 
 function applyFilter(filter) {
+  overlapFilter = null;
   map.setFilter('rides-layer', filter);
   map.setFilter('rides-hit', filter);
   map.setFilter('rides-dim', NO_MATCH);
   map.setFilter('rides-highlight', NO_MATCH);
+  map.setPaintProperty('rides-layer', 'line-opacity', ROUTE_OPACITY);
   applyFilter._current = filter;
 }
 applyFilter._current = null;
+
+function activeRouteFilter() {
+  if (applyFilter._current && overlapFilter) return ['all', applyFilter._current, overlapFilter];
+  return overlapFilter || applyFilter._current || null;
+}
 
 function computeStats(features) {
   let totalDist = 0, totalMoving = 0, totalElapsed = 0;
@@ -400,6 +519,7 @@ function refreshStats() {
   const stats = computeStats(geojson.features);
   const mi = Math.round(stats.totalDist / 1609.34).toLocaleString();
   const card = document.getElementById('stats-card');
+  if (!card) return;
   card.innerHTML = `<span class="stats-value">${mi}</span> miles<br>`
     + `<span class="stats-value">${fmtTime(stats.totalMoving)}</span> riding time<br>`
     + `<span class="stats-value">${fmtTime(stats.totalElapsed)}</span> elapsed time<br>`

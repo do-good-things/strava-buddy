@@ -11,62 +11,161 @@
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       background: #fff;
-      color: #333;
+      color: #ff1493;
       min-height: 100svh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
       padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
     }
-    .profiles {
-      display: flex;
-      gap: 1.5rem;
-      justify-content: center;
-      align-items: center;
-      flex-wrap: wrap;
-      padding: 2rem;
-    }
-    .profile-link {
+    .home-screen {
+      position: relative;
+      overflow: hidden;
+      min-height: 100svh;
       display: flex;
       flex-direction: column;
+      justify-content: space-between;
+      gap: 3rem;
+      padding: clamp(1.5rem, 5vw, 5rem);
+    }
+    .home-photo {
+      position: absolute;
+      z-index: 0;
+      top: clamp(5rem, 12vh, 9rem);
+      right: clamp(1.5rem, 8vw, 8rem);
+      width: min(36vw, 440px);
+      height: min(68vh, 700px);
+      object-fit: cover;
+      object-position: center;
+      border-radius: 3px;
+      opacity: 1;
+      pointer-events: none;
+    }
+    .home-photo-secondary {
+      top: auto;
+      right: auto;
+      left: clamp(1.5rem, 13vw, 13rem);
+      bottom: clamp(6rem, 14vh, 10rem);
+      width: min(44vw, 560px);
+      height: min(28vh, 300px);
+      opacity: 1;
+      transform: rotate(-1.5deg);
+    }
+    .home-heading,
+    .home-footer { position: relative; z-index: 1; }
+    .home-kicker { color: #999; font-size: clamp(0.7rem, 1.2vw, 0.9rem); letter-spacing: 0.04em; text-transform: lowercase; }
+    .home-title { max-width: 9ch; color: #ff1493; font-size: clamp(4.5rem, 16vw, 14rem); font-weight: 900; letter-spacing: -0.09em; line-height: 0.76; }
+    .home-footer { position: fixed; right: clamp(1.5rem, 5vw, 5rem); bottom: clamp(1.5rem, 5vw, 5rem); display: flex; align-items: center; gap: 1rem; color: #999; font-size: clamp(0.7rem, 1.2vw, 0.9rem); }
+    .home-note { max-width: 18ch; line-height: 1.3; }
+    .profile-link {
+      position: relative;
+      top: -3rem;
+      left: -7rem;
+      z-index: 2;
+      display: inline-flex;
       align-items: center;
+      justify-content: center;
       text-decoration: none;
-      color: inherit;
-      padding: 1.5rem 2rem;
-      border-radius: 8px;
-      border: 2px solid #eee;
-      transition: border-color 0.2s, box-shadow 0.2s;
-      min-width: 160px;
+      color: #fff;
+      padding: 0.85rem 1.25rem;
+      border: 2px solid #ff1493;
+      border-radius: 4px;
+      background: #ff1493;
+      cursor: pointer;
+      transition: background 0.2s, color 0.2s, transform 0.2s, border-color 0.2s;
     }
     .profile-link:hover {
-      border-color: #e040a0;
-      box-shadow: 0 2px 12px rgba(224, 64, 160, 0.1);
+      background: #fff;
+      color: #ff1493;
+      border-color: #ff1493;
+      transform: translateY(-3px);
     }
-    .profile-link img {
-      width: 64px;
-      height: 64px;
-      border-radius: 50%;
-      object-fit: cover;
-      margin-bottom: 0.75rem;
+    .profile-link:focus-visible {
+      outline: 3px solid rgba(255,20,147,0.35);
+      outline-offset: 4px;
     }
-    .profile-link .name {
-      font-weight: 600;
-      font-size: 0.95rem;
+    .profile-link .profile-action {
+      color: inherit;
+      font-size: 0.9rem;
+      font-weight: 800;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
     }
-    .profile-link .subtitle {
-      font-size: 0.8rem;
-      color: #999;
-      margin-top: 0.2rem;
+    .stats-card { position: fixed; left: clamp(1.5rem, 5vw, 5rem); bottom: clamp(1.5rem, 5vw, 5rem); display: flex; flex-direction: column; align-items: flex-start; gap: 0.15rem; width: min(390px, 40vw); color: #ff1493; font-size: clamp(0.74rem, 1.05vw, 0.92rem); font-weight: 800; line-height: 1; }
+    .stat-line { display: flex; align-items: baseline; gap: 0.45rem; white-space: nowrap; }
+    .stats-card .stats-value { font-size: clamp(1.3rem, 2.9vw, 2.7rem); font-weight: 900; letter-spacing: -0.06em; }
+    .stats-card .stats-label { color: #ff1493; font-size: 1.15em; font-weight: 800; letter-spacing: 0.04em; text-transform: lowercase; }
+    .stats-card .stats-value,
+    .stats-card .stats-label { background: linear-gradient(transparent 14%, #fff 14%, #fff 86%, transparent 86%); box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+    @media (max-width: 700px) {
+      .home-screen { padding: 1.25rem; gap: 2.5rem; }
+      .home-photo { top: 22%; right: 1.25rem; width: min(62vw, 320px); height: min(48vh, 430px); opacity: 1; }
+      .home-photo-secondary { top: auto; right: auto; left: 1.25rem; bottom: 16%; width: min(82vw, 360px); height: min(26vh, 220px); opacity: 1; }
+      .stats-card { left: 1.25rem; bottom: 1.25rem; width: min(70vw, 320px); }
+      .home-footer { right: 1.25rem; bottom: 1.25rem; gap: 0.75rem; }
+      .profile-link { top: -2rem; left: -3rem; padding: 0.75rem 1.1rem; }
     }
   </style>
 </head>
 <body>
-  <div class="profiles">
-    <a class="profile-link" href="/sarah">
-      <img src="https://dgalywyr863hv.cloudfront.net/pictures/athletes/118918676/28452476/15/large.jpg" alt="Sarah Snow">
-      <span class="name">Sarah Snow</span>
-      <span class="subtitle">San Francisco</span>
-    </a>
-  </div>
+  <main class="home-screen">
+    <img class="home-photo" src="/assets/home-rider.jpeg" alt="Cyclist riding through the hills">
+    <img class="home-photo home-photo-secondary" src="/assets/home-rider-trail.jpeg" alt="Cyclist and loaded bike in front of a mountain">
+    <div class="home-heading">
+      <div class="home-kicker">my personal heatmap of the world</div>
+      <h1 class="home-title">ride<br>sometime</h1>
+    </div>
+    <div class="stats-card" id="stats-card"></div>
+    <div class="home-footer">
+      <a class="profile-link" href="/sarah">
+        <span class="profile-action">view profile</span>
+      </a>
+      <span>ridesometime.com</span>
+    </div>
+  </main>
+  <script>
+    const fmtTime = seconds => {
+      const hours = Math.floor(seconds / 3600);
+      const minutes = Math.floor((seconds % 3600) / 60);
+      return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+    };
+    const statsFor = features => {
+      let totalDist = 0, totalMoving = 0, totalElapsed = 0;
+      const countries = new Set();
+      const continents = new Set();
+      features.forEach(feature => {
+        const p = feature.properties;
+        totalDist += p.distance || 0;
+        totalMoving += p.moving_time || 0;
+        totalElapsed += p.elapsed_time || 0;
+        const coords = feature.geometry.type === 'MultiLineString'
+          ? feature.geometry.coordinates.flat()
+          : feature.geometry.coordinates;
+        const [lng, lat] = coords[Math.floor(coords.length / 2)] || [0, 0];
+        if (lat > 49 && lat < 51 && lng > -124 && lng < -122) { countries.add('Canada'); continents.add('North America'); }
+        else if (lat > 20 && lat < 50 && lng > -130 && lng < -60) { countries.add('USA'); continents.add('North America'); }
+        else if (lat > 34 && lat < 36 && lng > 136 && lng < 140) { countries.add('Japan'); continents.add('Asia'); }
+        else if (lat > 46 && lat < 48 && lng > 6 && lng < 9) { countries.add('Switzerland'); continents.add('Europe'); }
+        else if (lat > 18 && lat < 23 && lng > -161 && lng < -154) { countries.add('USA'); continents.add('North America'); }
+      });
+      return { totalDist, totalMoving, totalElapsed, countries, continents };
+    };
+    (async () => {
+      const [ridesRes, ebikeRes] = await Promise.all([
+        fetch('/sarah/data/rides.json'),
+        fetch('/sarah/data/ebike-rides.json')
+      ]);
+      if (!ridesRes.ok) return;
+      const rides = await ridesRes.json();
+      if (ebikeRes.ok) {
+        const ebike = await ebikeRes.json();
+        rides.features.push(...ebike.features);
+      }
+      const stats = statsFor(rides.features);
+      const card = document.getElementById('stats-card');
+      card.innerHTML = `<div class="stat-line"><span class="stats-value">${Math.round(stats.totalDist / 1609.34).toLocaleString()}</span><span class="stats-label">miles</span></div>`
+        + `<div class="stat-line"><span class="stats-value">${fmtTime(stats.totalMoving)}</span><span class="stats-label">riding</span></div>`
+        + `<div class="stat-line"><span class="stats-value">${fmtTime(stats.totalElapsed)}</span><span class="stats-label">elapsed</span></div>`
+        + `<div class="stat-line"><span class="stats-value">${stats.continents.size}</span><span class="stats-label">continents</span></div>`
+        + `<div class="stat-line"><span class="stats-value">${stats.countries.size}</span><span class="stats-label">countries</span></div>`;
+    })();
+  </script>
 </body>
 </html>
