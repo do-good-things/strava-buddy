@@ -34,10 +34,12 @@ app.get('/sarah/config.js', (req, res) => {
   res.send(`const MAPBOX_TOKEN = ${JSON.stringify(process.env.MAPBOX_TOKEN)};`);
 });
 
-// Browsers request /favicon.ico by name whatever the page declares. Without
-// this the catch-all below answers with the landing page HTML, which they
-// discard, so the tab keeps whatever icon it had cached.
-app.get('/favicon.ico', (req, res) => res.redirect(301, '/favicon.svg'));
+// Serve a real ICO for browsers that discover this path automatically. A
+// permanent redirect to SVG can leave an unsupported or stale favicon cached.
+app.get('/favicon.ico', (req, res) => {
+  res.set('Cache-Control', 'no-cache');
+  res.sendFile(path.join(__dirname, 'public', 'favicon.ico'));
+});
 
 // Block direct access to profile.json (contains PII)
 app.get('/sarah/data/profile.json', (req, res) => res.status(404).end());
