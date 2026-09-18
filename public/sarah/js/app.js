@@ -5,6 +5,7 @@ const NO_MATCH = ['==', ['id'], -1];
 const ROUTE_OPACITY = 0.9;
 
 let map, geojson, activeRegion = null, selectedId = null, overlapFilter = null;
+let rideDetailVersion = 0;
 
 // Split a LineString into MultiLineString when consecutive points are > maxGapKm apart
 function splitGaps(coords, maxGapKm = 5) {
@@ -174,23 +175,26 @@ async function init() {
         activeRegion = r;
         selectedId = null;
         applyFilter(['==', ['get', 'region'], r.name]);
-        map.fitBounds(r.bounds, { padding: 40, duration: 1500 });
+        const duration = window.innerWidth <= 600 ? 0 : 1500;
+        map.resize();
+        map.fitBounds(r.bounds, { padding: 40, duration });
       }
     });
   });
 
   // Init map
   mapboxgl.accessToken = MAPBOX_TOKEN;
-  map = new mapboxgl.Map({ container: 'map', style: 'mapbox://styles/mapbox/outdoors-v12', ...home() });
+  // Outdoors defaults to globe, which rasterizes map layers at wider zooms.
+  // Mobile region fits reach those zooms; Mercator keeps them crisp throughout.
+  map = new mapboxgl.Map({ container: 'map', style: 'mapbox://styles/mapbox/outdoors-v12', projection: 'mercator', attributionControl: false, fadeDuration: 0, ...home() });
   map.addControl(new MapboxGeocoder({ accessToken: MAPBOX_TOKEN, mapboxgl, marker: false, collapsed: true, placeholder: 'Search', flyTo: { speed: 5, curve: 1, zoom: 11 } }), 'top-right');
-  map.addControl(new mapboxgl.NavigationControl());
   const geoInput = document.querySelector('.mapboxgl-ctrl-geocoder input');
   if (geoInput) { geoInput.spellcheck = false; geoInput.autocomplete = 'off'; geoInput.autocorrect = 'off'; geoInput.autocapitalize = 'off'; }
 
   map.once('style.load', () => {
-    // Remove labels/POIs, hide translucent water overlays, then fade base layers
-    // independently from the route layers added below.
-    const FADE = 0.4;
+    // Remove labels/POIs and hide translucent water overlays. Keep the base
+    // map layers at their native opacity so region fits remain crisp.
+    const FADE = 1;
     map.getStyle().layers.forEach(layer => {
       if (layer.id.match(/label|poi|place|shield|road-number|contour/i)) {
         map.setLayoutProperty(layer.id, 'visibility', 'none');
@@ -211,6 +215,14 @@ async function init() {
 
   map.on('load', () => {
     const rideWidth = () => 2;
+    if (window.ResizeObserver) {
+      let resizeFrame = 0;
+      const resizeObserver = new ResizeObserver(() => {
+        cancelAnimationFrame(resizeFrame);
+        resizeFrame = requestAnimationFrame(() => map.resize());
+      });
+      resizeObserver.observe(map.getContainer());
+    }
     let overlapClickInProgress = false;
     map.addSource('rides', { type: 'geojson', data: geojson, tolerance: 0.5 });
     map.addLayer({ id: 'rides-hit', type: 'line', source: 'rides', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': '#000', 'line-width': 14, 'line-opacity': 0 } });
@@ -237,6 +249,7 @@ async function init() {
         coords.forEach(coord => bounds.extend(coord));
       });
       if (!bounds.isEmpty()) {
+        map.stop();
         map.once('moveend', () => requestAnimationFrame(onSettled || placeRideSplash));
         map.fitBounds(bounds, { padding: 60, duration: 1000 });
       } else if (onSettled) {
@@ -252,11 +265,15 @@ async function init() {
       }
     });
 
-function selectRide(id, { fit = true } = {}) {
+    function selectRide(id, { fit = true } = {}) {
+      hideRideSplash();
+      const detailVersion = rideDetailVersion;
       selectedId = id;
       setActiveTab(document.querySelector('.region-btn'));
       activeRegion = null;
-      map.setFilter('rides-hit', NO_MATCH);
+      // Keep geographic-region hit testing active so a new map tap can open
+      // all rides at that point, independently of the current overlap group.
+      map.setFilter('rides-hit', applyFilter._current);
       // Reuse the same dim/highlight layers as geographic-region hover so a
       // chosen overlapping ride has exactly the same visual treatment.
       map.setFilter('rides-dim', dimFilter(selectedId));
@@ -270,27 +287,25 @@ function selectRide(id, { fit = true } = {}) {
         showRideSplash(ride);
         return;
       }
-      hideRideSplash();
-      fitRoutes([selectedId], () => showRideSplash(ride));
+      fitRoutes([selectedId], () => {
+        if (selectedId === id && detailVersion === rideDetailVersion) showRideSplash(ride);
+      });
     }
 
     map.on('click', 'rides-hit', e => {
       if (!e.features.length) return;
       const ids = [...new Set(e.features.map(feature => feature.id))];
+      overlapClickInProgress = true;
+      setTimeout(() => { overlapClickInProgress = false; }, 0);
       if (ids.length > 1) {
         // Opening the chooser is not a selection. Keep the overlapping rides
         // visible until the user explicitly chooses one, and hide unrelated
         // routes while the chooser is open.
         selectedId = null;
-        overlapClickInProgress = true;
-        // Touch events do not always bubble back through the map-level click
-        // handler. Clear the guard after this event so the next tap can close
-        // the chooser even when the map handler never saw the opening tap.
-        setTimeout(() => { overlapClickInProgress = false; }, 0);
         overlapFilter = ['match', ['id'], ids, true, false];
         hideRideDetail();
         map.setFilter('rides-layer', activeRouteFilter());
-        map.setFilter('rides-hit', NO_MATCH);
+        map.setFilter('rides-hit', applyFilter._current);
         map.setFilter('rides-dim', NO_MATCH);
         map.setFilter('rides-highlight', NO_MATCH);
         map.setPaintProperty('rides-layer', 'line-opacity', ROUTE_OPACITY);
@@ -317,6 +332,19 @@ function selectRide(id, { fit = true } = {}) {
       // chooser opened, rather than resetting the whole map to "all".
       applyFilter(applyFilter._current);
     });
+    // Mapbox's click event can be swallowed by touch navigation on mobile.
+    // Listen at the page level as well so tapping elsewhere reliably clears a
+    // selected ride or an open overlap chooser.
+    document.addEventListener('pointerdown', e => {
+      if (e.target.closest('.overlap-options, .mapboxgl-ctrl')) return;
+      if (selectedId === null && overlapFilter === null) return;
+      // Clear old details immediately; the subsequent map click can select
+      // the rides at the new point, or leave everything dismissed on empty space.
+      selectedId = null;
+      overlapFilter = null;
+      hideRideDetail();
+      applyFilter(applyFilter._current);
+    }, true);
   });
 }
 
@@ -325,18 +353,9 @@ function fmtTime(s) { const h = Math.floor(s / 3600), m = Math.floor((s % 3600) 
 function showOverlapChooser(ids, onSelect) {
   const chooser = document.getElementById('overlap-chooser');
   chooser.replaceChildren();
-  chooser.classList.remove('collapsed');
-  const toggle = document.createElement('button');
-  toggle.type = 'button';
-  toggle.className = 'overlap-toggle';
-  toggle.setAttribute('aria-expanded', 'true');
-  toggle.textContent = 'hide rides';
-  toggle.addEventListener('click', () => {
-    const collapsed = chooser.classList.toggle('collapsed');
-    toggle.setAttribute('aria-expanded', String(!collapsed));
-    toggle.textContent = collapsed ? 'show rides' : 'hide rides';
-  });
-  chooser.appendChild(toggle);
+  chooser.style.maxHeight = '';
+  const options = document.createElement('div');
+  options.className = 'overlap-options';
   const orderedIds = [...ids].sort((a, b) => {
     const aTime = new Date(geojson.features[a].properties.date).getTime();
     const bTime = new Date(geojson.features[b].properties.date).getTime();
@@ -351,10 +370,11 @@ function showOverlapChooser(ids, onSelect) {
     const pad = value => String(value).padStart(2, '0');
     button.textContent = Number.isNaN(date.getTime())
       ? 'unknown date'
-      : `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+      : `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
     button.addEventListener('click', () => onSelect(id));
-    chooser.appendChild(button);
+    options.appendChild(button);
   });
+  chooser.appendChild(options);
 }
 
 function setActiveOverlapOption(id) {
@@ -364,7 +384,9 @@ function setActiveOverlapOption(id) {
 }
 
 function hideRideDetail() {
-  document.getElementById('overlap-chooser').replaceChildren();
+  const chooser = document.getElementById('overlap-chooser');
+  chooser.replaceChildren();
+  chooser.style.maxHeight = '';
   hideRideSplash();
 }
 
@@ -390,6 +412,8 @@ function showRideSplash(p) {
 }
 
 function hideRideSplash() {
+  // Invalidate pending zoom callbacks so dismissed details cannot reappear.
+  rideDetailVersion++;
   const splash = document.getElementById('ride-splash');
   splash.classList.remove('visible');
   splash.style.visibility = '';
@@ -406,6 +430,22 @@ function placeRideSplash() {
   const maxLeft = Math.max(padding, wrap.clientWidth - width - padding);
   const maxTop = Math.max(padding, wrap.clientHeight - height - padding);
   const wrapRect = wrap.getBoundingClientRect();
+  const chooser = document.getElementById('overlap-chooser');
+  const mobileSelectedChooser = window.innerWidth <= 600 && selectedId !== null && chooser?.children.length;
+  chooser.style.maxHeight = '';
+  if (mobileSelectedChooser) {
+    // Reserve only the space the ride details need, plus a gap above them.
+    const availableHeight = Math.max(0, maxTop - chooser.offsetTop - padding);
+    chooser.style.maxHeight = `${availableHeight}px`;
+    const options = chooser.querySelector('.overlap-options');
+    const activeOption = options?.querySelector('.active');
+    if (activeOption) {
+      const optionRect = activeOption.getBoundingClientRect();
+      const listRect = options.getBoundingClientRect();
+      if (optionRect.bottom > listRect.bottom) options.scrollTop += optionRect.bottom - listRect.bottom;
+      else if (optionRect.top < listRect.top) options.scrollTop -= listRect.top - optionRect.top;
+    }
+  }
   const obstacles = [...wrap.querySelectorAll('#overlap-chooser, .mapboxgl-ctrl-geocoder, .mapboxgl-ctrl-group')]
     .filter(el => el !== splash && el.getClientRects().length)
     .map(el => {
@@ -438,7 +478,15 @@ function placeRideSplash() {
   const random = (max, min) => min + Math.random() * Math.max(0, max - min);
   let left = padding, top = padding;
   let placed = false;
-  for (let attempt = 0; attempt < 80; attempt++) {
+  if (mobileSelectedChooser) {
+    const controls = obstacles.filter(obstacle => !obstacle.isRoute);
+    if (!controls.some(obstacle => overlaps(padding, maxTop, obstacle))) {
+      left = padding;
+      top = maxTop;
+      placed = true;
+    }
+  }
+  for (let attempt = 0; attempt < 80 && !placed; attempt++) {
     const candidateLeft = random(maxLeft, padding);
     const candidateTop = random(maxTop, padding);
     if (!obstacles.some(obstacle => overlaps(candidateLeft, candidateTop, obstacle))) {
